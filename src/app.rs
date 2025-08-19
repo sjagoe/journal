@@ -1,12 +1,11 @@
-use color_eyre::Result;
 use ratatui::{
     layout::Rect,
-    prelude::{Modifier, Text},
+    prelude::{Modifier},
     style::{Color, Style},
-    text::{Line, Span},
+    text::{Span},
     widgets::{
         block::{Padding, Title},
-        Block, Borders, Paragraph,
+        Block, Borders,
     },
     Frame,
 };
@@ -14,16 +13,16 @@ use ratatui::{
 use crate::config::Config;
 
 pub struct App {
-    config: Config,
+    _config: Config,
 }
 
 impl App {
     pub fn new(config: &Config) -> App {
         App {
-            config: config.clone(),
+            _config: config.clone(),
         }
     }
-    pub fn title(&self) -> Vec<Span> {
+    pub fn title(&self) -> Vec<Span<'_>> {
         let mut parts = vec![Span::from(" ")];
 
         parts.push(Span::styled(
@@ -37,7 +36,7 @@ impl App {
         parts
     }
 
-    pub fn draw(&mut self, f: &mut Frame, area: Rect) {
+    pub fn draw(&mut self, _f: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
             .padding(Padding::horizontal(1))
