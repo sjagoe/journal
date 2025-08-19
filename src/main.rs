@@ -4,7 +4,6 @@ use std::io::BufReader;
 
 use color_eyre::Result;
 use dirs::config_dir;
-use serde_json;
 use serde::Deserialize;
 
 const APP_NAME: &str = "personal-journal";
@@ -17,7 +16,7 @@ struct Config {
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "identity: {}\n", self.identity)?;
+        writeln!(f, "identity: {}", self.identity)?;
         write!(f, "journal_path: {}", self.journal_path)?;
         Ok(())
     }
