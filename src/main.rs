@@ -2,11 +2,10 @@ use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 
+use color_eyre::Result;
 use dirs::config_dir;
 use serde_json;
 use serde::Deserialize;
-
-use color_eyre::Result;
 
 const APP_NAME: &str = "personal-journal";
 
