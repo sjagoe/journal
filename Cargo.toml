@@ -5,3 +5,15 @@ edition = "2024"
 publish = false
 
 [dependencies]
+clap = { version = "4.5.45", features = ["derive"] }
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
+ratatui = "0.29.0"
+
+[profile.dev]
+# Turn on a small amount of optimisation in Development mode.
+opt-level = 1
+
+[profile.dev.package."*"]
+# Set the default for dependencies in Development mode.
+opt-level = 3
