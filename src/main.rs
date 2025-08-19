@@ -1,26 +1,24 @@
-use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 
 use color_eyre::Result;
 use dirs::config_dir;
-use serde::Deserialize;
+
+use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::{backend::Backend, Terminal};
+
+mod app;
+mod config;
+mod tui;
+mod ui;
+
+use crate::{
+    app::App,
+    config::Config,
+    ui::ui,
+};
 
 const APP_NAME: &str = "personal-journal";
-
-#[derive(Debug, Deserialize)]
-struct Config {
-    identity: String,
-    journal_path: String,
-}
-
-impl fmt::Display for Config {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "identity: {}", self.identity)?;
-        write!(f, "journal_path: {}", self.journal_path)?;
-        Ok(())
-    }
-}
 
 fn main() -> Result<()> {
     let mut config_path = config_dir().unwrap();
@@ -33,5 +31,52 @@ fn main() -> Result<()> {
 
     println!("{}", config);
 
+    let mut app: app::App = app::App::new(&config);
+
+    let mut terminal = tui::init()?;
+    run_app(&mut terminal, &mut app)?;
+    tui::restore()?;
+
     Ok(())
+}
+
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool> {
+    let redraw = false;
+    loop {
+        if redraw {
+            terminal.clear()?;
+        }
+        terminal.draw(|f| ui(f, app))?;
+
+        // if !event::poll(Duration::from_millis(50))? {
+        //     redraw = match app.handle_event(&Event::Tick) {
+        //         Ok(redraw) => redraw.0,
+        //         Err(error) => {
+        //             app.error(error);
+        //             true
+        //         }
+        //     };
+        //     continue;
+        // }
+
+        let read_event = event::read()?;
+
+        if let CrosstermEvent::Key(key) = read_event {
+            if key.kind == KeyEventKind::Release {
+                // Skip events that are not KeyEventKind::Press
+                continue;
+            }
+            if key.code == KeyCode::Char('x') && key.modifiers == KeyModifiers::CONTROL {
+                return Ok(true);
+            }
+            // let navigation_action = Event::from(key);
+            // redraw = match app.handle_event(&navigation_action) {
+            //     Ok(redraw) => redraw.0,
+            //     Err(error) => {
+            //         app.error(error);
+            //         true
+            //     }
+            // }
+        }
+    }
 }
