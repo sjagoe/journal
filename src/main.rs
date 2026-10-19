@@ -49,17 +49,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool
         }
         terminal.draw(|f| ui(f, app))?;
 
-        // if !event::poll(Duration::from_millis(50))? {
-        //     redraw = match app.handle_event(&Event::Tick) {
-        //         Ok(redraw) => redraw.0,
-        //         Err(error) => {
-        //             app.error(error);
-        //             true
-        //         }
-        //     };
-        //     continue;
-        // }
-
         let read_event = event::read()?;
 
         if let CrosstermEvent::Key(key) = read_event {

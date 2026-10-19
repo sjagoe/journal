@@ -6,11 +6,11 @@ use ratatui::{
 
 mod entries_page;
 mod pagination;
-mod navigation;
+mod events;
 
 use crate::config::Config;
 use crate::traits::Drawable;
-use crate::app::navigation::{ActionInfo, NavigationAction};
+use crate::app::events::{ActionInfo, Event};
 use crate::app::entries_page::EntriesPage;
 
 pub struct App {
@@ -59,7 +59,7 @@ impl App {
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
         let actions = vec![
-            NavigationAction::Exit,
+            Event::Exit,
         ];
 
         let keys_hint = actions
