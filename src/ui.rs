@@ -9,11 +9,11 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     // Create the layout sections.
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(4), Constraint::Length(1)])
-        .split(f.area());
+        .constraints([Constraint::Min(4), Constraint::Length(1)]);
+    let [window, statusbar] = chunks.areas(f.area());
 
-    app.draw(f, chunks[0]);
-    app.draw_context_hint(f, chunks[1]);
+    app.draw(f, window);
+    app.draw_context_hint(f, statusbar);
 }
 
 // /// helper function to create a centered rect using up certain percentage of the available rect `r`

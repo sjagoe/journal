@@ -5,33 +5,38 @@ use std::path::PathBuf;
 use color_eyre::Result;
 
 use ratatui::{
-    layout::Rect,
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, List, ListItem},
-    Frame,
+    widgets::{Block, Borders, List, ListItem, Padding},
 };
 
 use crate::app::pagination::pagination;
-use crate::traits::{Drawable, Navigable};
 use crate::config::Config;
+use crate::traits::{Drawable, Navigable};
 
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Entries {
-    generic: Vec<String>,
+    documents: Vec<String>,
+    general: Vec<String>,
     narrative: Vec<String>,
 }
 
 impl Entries {
     fn len(&self) -> usize {
-        self.narrative.len() + self.generic.len()
+        self.narrative.len() + self.general.len()
     }
 
     fn items(&self) -> Vec<String> {
-        self.narrative.iter().cloned().chain(self.generic.iter().cloned()).collect()
+        self.narrative
+            .iter()
+            .cloned()
+            .chain(self.general.iter().cloned())
+            .collect()
     }
 }
 
@@ -46,11 +51,9 @@ impl EntriesPage {
         entries_path.push(&config.journal_path);
         entries_path.push("entries.json");
 
-        let file = File::open(entries_path)
-            .expect("Unable to open entries data");
+        let file = File::open(entries_path).expect("Unable to open entries data");
         let reader = BufReader::new(file);
-        let entries = serde_json::from_reader(reader)
-            .expect("Unable to deserialize entries");
+        let entries = serde_json::from_reader(reader).expect("Unable to deserialize entries");
 
         EntriesPage {
             entries: entries,
@@ -65,14 +68,11 @@ impl EntriesPage {
     fn items(&self) -> Vec<String> {
         self.entries.items()
     }
-}
 
-impl Drawable for EntriesPage {
-    fn draw(&self, f: &mut Frame, area: Rect, content_block: Block) -> Rect {
+    fn draw_pane(&self, frame: &mut Frame, items: &Vec<String>, area: Rect, content_block: Block) {
         let viewport = content_block.inner(area);
 
         let mut list_items = Vec::<ListItem>::new();
-        let items = self.items();
 
         let visible = viewport.height;
         let (_page, _pages, page_start_index) =
@@ -100,8 +100,43 @@ impl Drawable for EntriesPage {
             ]);
             list_items.push(ListItem::new(line));
         }
+
         let content = List::new(list_items).block(content_block);
-        f.render_widget(content, area);
+        frame.render_widget(content, area);
+    }
+}
+
+impl Drawable for EntriesPage {
+    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
+        let viewport = content_block.inner(area);
+
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)]);
+
+        let [general_pane, narrative_pane] = layout.areas(area);
+
+        let general_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .style(Style::default())
+            .title(Line::from("General Entries"));
+
+        self.draw_pane(frame, &self.entries.general, general_pane, general_block);
+
+        let narrative_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .style(Style::default())
+            .title(Line::from("Narrative Entries"));
+
+        self.draw_pane(
+            frame,
+            &self.entries.narrative,
+            narrative_pane,
+            narrative_block,
+        );
+
         viewport
     }
 

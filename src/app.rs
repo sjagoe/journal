@@ -9,16 +9,20 @@ mod pagination;
 mod navigation;
 
 use crate::config::Config;
+use crate::traits::Drawable;
 use crate::app::navigation::{ActionInfo, NavigationAction};
+use crate::app::entries_page::EntriesPage;
 
 pub struct App {
     _config: Config,
+    entries_page: EntriesPage,
 }
 
 impl App {
     pub fn new(config: &Config) -> App {
         App {
             _config: config.clone(),
+            entries_page: EntriesPage::new(config),
         }
     }
     pub fn title(&self) -> Vec<Span<'_>> {
@@ -35,7 +39,7 @@ impl App {
         parts
     }
 
-    pub fn draw(&mut self, f: &mut Frame, area: Rect) {
+    pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
             .padding(Padding::horizontal(1))
@@ -43,27 +47,8 @@ impl App {
             .style(Style::default())
             .title(title);
 
-        content_block.inner(area);
-
-        f.render_widget(content_block, area);
-        // let viewport = if let Some(page) = match self.mode() {
-        //     AppMode::BrowseRefs => Some(Box::<&dyn Drawable>::new(&self.refs_page)),
-        //     AppMode::BrowseTrees => Some(Box::<&dyn Drawable>::new(
-        //         self.tree_pages
-        //             .last()
-        //             .expect("No tree browsing page in tree mode"),
-        //     )),
-        //     AppMode::ViewBlob => Some(Box::<&dyn Drawable>::new(
-        //         self.blob_pager
-        //             .as_ref()
-        //             .expect("No blob browser page in blob mode"),
-        //     )),
-        //     _ => None,
-        // } {
-        //     page.draw(f, area, content_block)
-        // } else {
-        //     content_block.inner(area)
-        // };
+        let page = Box::<&dyn Drawable>::new(&self.entries_page);
+        page.draw(frame, area, content_block);
 
         // self.set_height(viewport.height);
 
