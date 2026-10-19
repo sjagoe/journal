@@ -26,68 +26,57 @@ pub struct Entries {
     narrative: Vec<String>,
 }
 
-impl Entries {
-    fn len(&self) -> usize {
-        self.narrative.len() + self.general.len()
-    }
-
-    fn items(&self) -> Vec<String> {
-        self.narrative
-            .iter()
-            .cloned()
-            .chain(self.general.iter().cloned())
-            .collect()
-    }
-}
-
-pub struct EntriesPage {
-    entries: Entries,
+struct EntriesPane {
+    entries: Vec<String>,
     selected_index: usize,
+    pane_name: String,
+    active: bool,
 }
 
-impl EntriesPage {
-    pub fn new(config: &Config) -> EntriesPage {
-        let mut entries_path = PathBuf::new();
-        entries_path.push(&config.journal_path);
-        entries_path.push("entries.json");
+enum ActivePane {
+    General,
+    Narrative,
+}
 
-        let file = File::open(entries_path).expect("Unable to open entries data");
-        let reader = BufReader::new(file);
-        let entries = serde_json::from_reader(reader).expect("Unable to deserialize entries");
-
-        EntriesPage {
+impl EntriesPane {
+    pub fn new(name: String, entries: Vec<String>, active: bool) -> EntriesPane {
+        EntriesPane {
             entries: entries,
             selected_index: 0,
+            pane_name: name,
+            active: active,
         }
     }
 
     fn len(&self) -> usize {
         self.entries.len()
     }
+}
 
-    fn items(&self) -> Vec<String> {
-        self.entries.items()
-    }
-
-    fn draw_pane(&self, frame: &mut Frame, items: &Vec<String>, area: Rect, content_block: Block) {
+impl Drawable for EntriesPane {
+    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
         let viewport = content_block.inner(area);
 
         let mut list_items = Vec::<ListItem>::new();
 
         let visible = viewport.height;
         let (_page, _pages, page_start_index) =
-            pagination(items.len(), visible.into(), self.selected_index);
+            pagination(self.entries.len(), visible.into(), self.selected_index);
 
-        let end_slice = if page_start_index + usize::from(visible) >= items.len() {
-            items.len()
+        let end_slice = if page_start_index + usize::from(visible) >= self.entries.len() {
+            self.entries.len()
         } else {
             page_start_index + usize::from(visible)
         };
-        let display_items = &items[page_start_index..end_slice];
+        let display_items = &self.entries[page_start_index..end_slice];
 
         for (pos, item) in display_items.iter().enumerate() {
             let style = if pos + page_start_index == self.selected_index {
-                Style::default().fg(Color::Black).bg(Color::Cyan)
+                let [fg, bg] = match self.active {
+                    true => [Color::Black, Color::Cyan],
+                    false => [Color::White, Color::DarkGray],
+                };
+                Style::default().fg(fg).bg(bg)
             } else {
                 Style::default().fg(Color::Gray)
             };
@@ -103,48 +92,28 @@ impl EntriesPage {
 
         let content = List::new(list_items).block(content_block);
         frame.render_widget(content, area);
-    }
-}
-
-impl Drawable for EntriesPage {
-    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
-        let viewport = content_block.inner(area);
-
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)]);
-
-        let [general_pane, narrative_pane] = layout.areas(area);
-
-        let general_block = Block::default()
-            .padding(Padding::horizontal(1))
-            .borders(Borders::ALL)
-            .style(Style::default())
-            .title(Line::from("General Entries"));
-
-        self.draw_pane(frame, &self.entries.general, general_pane, general_block);
-
-        let narrative_block = Block::default()
-            .padding(Padding::horizontal(1))
-            .borders(Borders::ALL)
-            .style(Style::default())
-            .title(Line::from("Narrative Entries"));
-
-        self.draw_pane(
-            frame,
-            &self.entries.narrative,
-            narrative_pane,
-            narrative_block,
-        );
 
         viewport
     }
 
-    fn title(&self) -> String {
-        "title".into()
+    fn title(&self) -> Vec<Span<'_>> {
+        let mut parts = vec![Span::from(" ")];
+        let fg = match self.active {
+            true => Color::Green,
+            false => Color::Gray,
+        };
+
+        parts.push(Span::styled(
+            self.pane_name.clone(),
+            Style::default().fg(fg).add_modifier(Modifier::BOLD),
+        ));
+
+        parts.push(Span::from(" "));
+        parts
     }
 }
-impl Navigable for EntriesPage {
+
+impl Navigable for EntriesPane {
     fn home(&mut self, _page_size: u16) {
         self.selected_index = 0;
     }
@@ -185,12 +154,130 @@ impl Navigable for EntriesPage {
     }
 
     fn selected_item(&self) -> String {
-        let items = &self.items();
+        let items = &self.entries;
         if items.is_empty() {
             "".to_string()
         } else {
             items[self.selected_index].to_string()
         }
+    }
+
+    fn next_tick(&mut self, _block: bool) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub struct EntriesPage {
+    _documents: Vec<String>,
+    general_pane: EntriesPane,
+    narrative_pane: EntriesPane,
+    active_pane: ActivePane,
+}
+
+impl EntriesPage {
+    pub fn new(config: &Config) -> EntriesPage {
+        let mut entries_path = PathBuf::new();
+        entries_path.push(&config.journal_path);
+        entries_path.push("entries.json");
+
+        let file = File::open(entries_path).expect("Unable to open entries data");
+        let reader = BufReader::new(file);
+        let entries: Entries =
+            serde_json::from_reader(reader).expect("Unable to deserialize entries");
+
+        let general_pane = EntriesPane::new("General Entries".into(), entries.general, true);
+
+        EntriesPage {
+            _documents: entries.documents,
+            general_pane: general_pane,
+            narrative_pane: EntriesPane::new("Narrative Entries".into(), entries.narrative, false),
+            active_pane: ActivePane::General,
+        }
+    }
+
+    fn current_pane(&mut self) -> &mut EntriesPane {
+        match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        }
+    }
+}
+
+impl Drawable for EntriesPage {
+    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
+        let viewport = content_block.inner(area);
+
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)]);
+
+        let [general_area, narrative_area] = layout.areas(viewport);
+
+        let general_pane = Box::<&dyn Drawable>::new(&self.general_pane);
+        let general_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .style(Style::default())
+            .title(Line::from(general_pane.title()));
+        general_pane.draw(frame, general_area, general_block);
+
+        let narrative_pane = Box::<&dyn Drawable>::new(&self.narrative_pane);
+        let narrative_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .style(Style::default())
+            .title(Line::from(narrative_pane.title()));
+        narrative_pane.draw(frame, narrative_area, narrative_block);
+
+        frame.render_widget(content_block, area);
+
+        viewport
+    }
+
+    fn title(&self) -> Vec<Span<'_>> {
+        vec![Span::from(" ")]
+    }
+}
+
+impl Navigable for EntriesPage {
+    fn home(&mut self, page_size: u16) {
+        self.current_pane().home(page_size);
+    }
+
+    fn end(&mut self, page_size: u16) {
+        self.current_pane().end(page_size);
+    }
+
+    fn pagedown(&mut self, page_size: u16) {
+        self.current_pane().pagedown(page_size);
+    }
+
+    fn pageup(&mut self, page_size: u16) {
+        self.current_pane().pageup(page_size);
+    }
+
+    fn next_selection(&mut self) {
+        self.current_pane().next_selection();
+    }
+
+    fn previous_selection(&mut self) {
+        self.current_pane().previous_selection();
+    }
+
+    fn select(&self) -> Option<String> {
+        let pane = match self.active_pane {
+            ActivePane::General => &self.general_pane,
+            ActivePane::Narrative => &self.narrative_pane,
+        };
+        pane.select()
+    }
+
+    fn selected_item(&self) -> String {
+        let pane = match self.active_pane {
+            ActivePane::General => &self.general_pane,
+            ActivePane::Narrative => &self.narrative_pane,
+        };
+        pane.selected_item()
     }
 
     fn next_tick(&mut self, _block: bool) -> Result<()> {

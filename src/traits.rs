@@ -1,10 +1,6 @@
 use color_eyre::Result;
 
-use ratatui::{
-    layout::Rect,
-    widgets::Block,
-    Frame,
-};
+use ratatui::{Frame, layout::Rect, text::Span, widgets::Block};
 
 pub trait Navigable {
     fn home(&mut self, page_size: u16);
@@ -21,5 +17,5 @@ pub trait Navigable {
 pub trait Drawable {
     fn draw(&self, f: &mut Frame, area: Rect, content_block: Block) -> Rect;
 
-    fn title(&self) -> String;
+    fn title(&self) -> Vec<Span<'_>>;
 }

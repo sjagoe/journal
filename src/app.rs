@@ -1,17 +1,23 @@
 use ratatui::{
-    Frame, layout::Rect, prelude::Modifier, style::{Color, Style}, text::{Line, Span}, widgets::{
-        Block, Borders, Paragraph, block::{Padding, Title},
+    Frame,
+    layout::Rect,
+    prelude::Modifier,
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{
+        Block, BorderType, Borders, Paragraph,
+        block::{Padding, Title},
     },
 };
 
 mod entries_page;
-mod pagination;
 mod events;
+mod pagination;
 
+use crate::app::entries_page::EntriesPage;
+use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::traits::Drawable;
-use crate::app::events::{ActionInfo, Event};
-use crate::app::entries_page::EntriesPage;
 
 pub struct App {
     _config: Config,
@@ -29,9 +35,9 @@ impl App {
         let mut parts = vec![Span::from(" ")];
 
         parts.push(Span::styled(
-            "Entries",
+            "Journal Navigator",
             Style::default()
-                .fg(Color::Green)
+                .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ));
 
@@ -42,8 +48,9 @@ impl App {
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
-            .padding(Padding::horizontal(1))
-            .borders(Borders::ALL)
+            .padding(Padding::horizontal(0))
+            .borders(Borders::TOP)
+            .border_type(BorderType::Double)
             .style(Style::default())
             .title(title);
 
@@ -58,9 +65,7 @@ impl App {
     }
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-        let actions = vec![
-            Event::Exit,
-        ];
+        let actions = vec![Event::Exit];
 
         let keys_hint = actions
             .iter()
