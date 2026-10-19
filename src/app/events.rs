@@ -35,7 +35,23 @@ impl From<KeyEvent> for Event {
             (KeyCode::Up, 0) => Event::PreviousSelection,
             (KeyCode::Down, 0) => Event::NextSelection,
             (KeyCode::Tab, 0) => Event::SwitchPane,
-            (_keycode, _modifiers) => Event::Invalid,
+            (keycode, modifiers) => {
+                if modifiers == KeyModifiers::ALT.bits() {
+                    match keycode {
+                        KeyCode::Char('v') => Event::PageUp,
+                        _ => Event::Invalid,
+                    }
+                } else if modifiers == KeyModifiers::CONTROL.bits() {
+                    match keycode {
+                        KeyCode::Char('n') => Event::NextSelection,
+                        KeyCode::Char('p') => Event::PreviousSelection,
+                        KeyCode::Char('v') => Event::PageDown,
+                        _ => Event::Invalid,
+                    }
+                } else {
+                    Event::Invalid
+                }
+            }
         }
     }
 }
@@ -53,10 +69,10 @@ impl From<&Event> for ActionInfo {
             Event::Exit => ("C-x", "Exit"),
             Event::Home => ("Home", "Go to the top"),
             Event::End => ("End", "Go to the bottom"),
-            Event::PageUp => ("PgUp", "Page Up"),
-            Event::PageDown => ("PgDn", "Page Down"),
-            Event::NextSelection => ("Down", "Select the next item"),
-            Event::PreviousSelection => ("Up", "Select the previous item"),
+            Event::PageUp => ("M-v", "Page Up"),
+            Event::PageDown => ("C-v", "Page Down"),
+            Event::NextSelection => ("C-n", "Select the next item"),
+            Event::PreviousSelection => ("C-p", "Select the previous item"),
             Event::SwitchPane => ("Tab", "Navigate between entry types"),
             // We never want to see this but have to define it
             Event::Invalid => ("invalid", "invalid"),
