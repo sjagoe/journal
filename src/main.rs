@@ -5,16 +5,17 @@ use color_eyre::Result;
 use dirs::config_dir;
 
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
-use ratatui::{backend::Backend, Terminal};
+use ratatui::{Terminal, backend::Backend};
 
 mod app;
 mod config;
+mod errors;
 mod traits;
 mod tui;
 mod ui;
 
 use crate::{
-    app::App,
+    app::{App, events::Event},
     config::Config,
     ui::ui,
 };
@@ -22,6 +23,8 @@ use crate::{
 const APP_NAME: &str = "personal-journal";
 
 fn main() -> Result<()> {
+    errors::install_hooks()?;
+
     let mut config_path = config_dir().unwrap();
     config_path.push(APP_NAME);
     config_path.push("config.json");
@@ -42,7 +45,7 @@ fn main() -> Result<()> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool> {
-    let redraw = false;
+    let mut redraw = false;
     loop {
         if redraw {
             terminal.clear()?;
@@ -59,14 +62,14 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool
             if key.code == KeyCode::Char('x') && key.modifiers == KeyModifiers::CONTROL {
                 return Ok(true);
             }
-            // let navigation_action = Event::from(key);
-            // redraw = match app.handle_event(&navigation_action) {
-            //     Ok(redraw) => redraw.0,
-            //     Err(error) => {
-            //         app.error(error);
-            //         true
-            //     }
-            // }
+            let navigation_action = Event::from(key);
+            redraw = match app.handle_event(&navigation_action) {
+                Ok(redraw) => redraw.0,
+                Err(error) => {
+                    app.error(error);
+                    true
+                }
+            }
         }
     }
 }

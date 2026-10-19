@@ -31,25 +31,32 @@ struct EntriesPane {
     selected_index: usize,
     pane_name: String,
     active: bool,
+    pane_kind: ActivePane,
 }
 
+#[derive(PartialEq)]
 enum ActivePane {
     General,
     Narrative,
 }
 
 impl EntriesPane {
-    pub fn new(name: String, entries: Vec<String>, active: bool) -> EntriesPane {
+    pub fn new(name: String, entries: Vec<String>, pane_kind: ActivePane) -> EntriesPane {
         EntriesPane {
-            entries: entries,
+            entries,
             selected_index: 0,
             pane_name: name,
-            active: active,
+            active: false,
+            pane_kind,
         }
     }
 
     fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    fn activate(&mut self, active_pane: &ActivePane) {
+        self.active = active_pane == &self.pane_kind;
     }
 }
 
@@ -162,6 +169,8 @@ impl Navigable for EntriesPane {
         }
     }
 
+    fn switch_pane(&mut self) {}
+
     fn next_tick(&mut self, _block: bool) -> Result<()> {
         Ok(())
     }
@@ -185,12 +194,24 @@ impl EntriesPage {
         let entries: Entries =
             serde_json::from_reader(reader).expect("Unable to deserialize entries");
 
-        let general_pane = EntriesPane::new("General Entries".into(), entries.general, true);
+        let active_pane = ActivePane::General;
+        let mut general_pane = EntriesPane::new(
+            "General Entries".into(),
+            entries.general,
+            ActivePane::General,
+        );
+        general_pane.activate(&active_pane);
+        let mut narrative_pane = EntriesPane::new(
+            "Narrative Entries".into(),
+            entries.narrative,
+            ActivePane::Narrative,
+        );
+        narrative_pane.activate(&active_pane);
 
         EntriesPage {
             _documents: entries.documents,
             general_pane: general_pane,
-            narrative_pane: EntriesPane::new("Narrative Entries".into(), entries.narrative, false),
+            narrative_pane: narrative_pane,
             active_pane: ActivePane::General,
         }
     }
@@ -278,6 +299,16 @@ impl Navigable for EntriesPage {
             ActivePane::Narrative => &self.narrative_pane,
         };
         pane.selected_item()
+    }
+
+    fn switch_pane(&mut self) {
+        let new_active = match self.active_pane {
+            ActivePane::General => ActivePane::Narrative,
+            ActivePane::Narrative => ActivePane::General,
+        };
+        self.narrative_pane.activate(&new_active);
+        self.general_pane.activate(&new_active);
+        self.active_pane = new_active;
     }
 
     fn next_tick(&mut self, _block: bool) -> Result<()> {

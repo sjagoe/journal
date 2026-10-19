@@ -11,6 +11,7 @@ pub trait Navigable {
     fn previous_selection(&mut self);
     fn select(&self) -> Option<String>;
     fn selected_item(&self) -> String;
+    fn switch_pane(&mut self);
     fn next_tick(&mut self, block: bool) -> Result<()>;
 }
 

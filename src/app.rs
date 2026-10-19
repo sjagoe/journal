@@ -11,17 +11,21 @@ use ratatui::{
 };
 
 mod entries_page;
-mod events;
+pub mod events;
 mod pagination;
 
 use crate::app::entries_page::EntriesPage;
 use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
-use crate::traits::Drawable;
+use crate::errors::JournalError;
+use crate::traits::{Drawable, Navigable};
+
+pub struct Redraw(pub bool);
 
 pub struct App {
     _config: Config,
     entries_page: EntriesPage,
+    height: u16,
 }
 
 impl App {
@@ -29,6 +33,7 @@ impl App {
         App {
             _config: config.clone(),
             entries_page: EntriesPage::new(config),
+            height: 0,
         }
     }
     pub fn title(&self) -> Vec<Span<'_>> {
@@ -45,6 +50,10 @@ impl App {
         parts
     }
 
+    pub fn set_height(&mut self, h: u16) {
+        self.height = h;
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
@@ -55,9 +64,9 @@ impl App {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        page.draw(frame, area, content_block);
+        let viewport = page.draw(frame, area, content_block);
 
-        // self.set_height(viewport.height);
+        self.set_height(viewport.height);
 
         // if let Some(error) = self.active_error {
         //     self.display_error(f, &error);
@@ -79,4 +88,22 @@ impl App {
         let hint = Paragraph::new(Line::from(content)).block(block);
         f.render_widget(hint, area);
     }
+
+    pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
+        let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
+        match event {
+            Event::Select => return Ok(Redraw(false)),
+            Event::Home => page.home(self.height),
+            Event::End => page.end(self.height),
+            Event::PageUp => page.pageup(self.height),
+            Event::PageDown => page.pagedown(self.height),
+            Event::NextSelection => page.next_selection(),
+            Event::PreviousSelection => page.previous_selection(),
+            Event::SwitchPane => page.switch_pane(),
+            _ => {}
+        };
+        Ok(Redraw(false))
+    }
+
+    pub fn error(&mut self, error: JournalError) {}
 }
