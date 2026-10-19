@@ -1,19 +1,15 @@
 use ratatui::{
-    layout::Rect,
-    prelude::{Modifier},
-    style::{Color, Style},
-    text::{Span},
-    widgets::{
-        block::{Padding, Title},
-        Block, Borders,
+    Frame, layout::Rect, prelude::Modifier, style::{Color, Style}, text::{Line, Span}, widgets::{
+        Block, Borders, Paragraph, block::{Padding, Title},
     },
-    Frame,
 };
 
 mod entries_page;
 mod pagination;
+mod navigation;
 
 use crate::config::Config;
+use crate::app::navigation::{ActionInfo, NavigationAction};
 
 pub struct App {
     _config: Config,
@@ -39,7 +35,7 @@ impl App {
         parts
     }
 
-    pub fn draw(&mut self, _f: &mut Frame, area: Rect) {
+    pub fn draw(&mut self, f: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
             .padding(Padding::horizontal(1))
@@ -48,6 +44,8 @@ impl App {
             .title(title);
 
         content_block.inner(area);
+
+        f.render_widget(content_block, area);
         // let viewport = if let Some(page) = match self.mode() {
         //     AppMode::BrowseRefs => Some(Box::<&dyn Drawable>::new(&self.refs_page)),
         //     AppMode::BrowseTrees => Some(Box::<&dyn Drawable>::new(
@@ -72,5 +70,23 @@ impl App {
         // if let Some(error) = self.active_error {
         //     self.display_error(f, &error);
         // }
+    }
+
+    pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
+        let actions = vec![
+            NavigationAction::Exit,
+        ];
+
+        let keys_hint = actions
+            .iter()
+            .map(|a| ActionInfo::from(a).to_string())
+            .collect::<Vec<String>>()
+            .join(" | ");
+        let content = Span::styled(keys_hint, Style::default());
+        let block = Block::default()
+            .padding(Padding::horizontal(1))
+            .style(Style::default().fg(Color::Black).bg(Color::Gray));
+        let hint = Paragraph::new(Line::from(content)).block(block);
+        f.render_widget(hint, area);
     }
 }

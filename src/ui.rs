@@ -13,7 +13,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     app.draw(f, chunks[0]);
-    // app.draw_context_hint(f, chunks[1]);
+    app.draw_context_hint(f, chunks[1]);
 }
 
 // /// helper function to create a centered rect using up certain percentage of the available rect `r`
