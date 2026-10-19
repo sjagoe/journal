@@ -9,6 +9,7 @@ use ratatui::{backend::Backend, Terminal};
 
 mod app;
 mod config;
+mod traits;
 mod tui;
 mod ui;
 

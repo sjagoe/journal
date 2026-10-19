@@ -10,6 +10,9 @@ use ratatui::{
     Frame,
 };
 
+mod entries_page;
+mod pagination;
+
 use crate::config::Config;
 
 pub struct App {

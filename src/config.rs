@@ -4,8 +4,8 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    identity: String,
-    journal_path: String,
+    pub identity: String,
+    pub journal_path: String,
 }
 
 impl fmt::Display for Config {
