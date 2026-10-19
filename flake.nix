@@ -1,62 +1,127 @@
+# SPDX-License-Identifier: Unlicense
 {
-  description = "Journal";
+  description = "Age-encrypted journaling";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    crane.url = "github:ipetkov/crane";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        # Read the file relative to the flake's root
-        overrides = (builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml")));
-        libPath = with pkgs; lib.makeLibraryPath [
-          # load external libraries that you need in your rust project here
-        ];
-      in
-      {
-        devShells.default = pkgs.mkShell rec {
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = with pkgs; [
-            clang
-            llvmPackages.bintools
-            rustup
-          ];
+  # Add settings for your binary cache.
+  # nixConfig = {
+  #   extra-substituters = [
+  #   ];
+  #   extra-trusted-public-keys = [
+  #   ];
+  # };
 
-          RUSTC_VERSION = overrides.toolchain.channel;
+  outputs =
+    inputs@{ nixpkgs, flake-parts, ... }:
+    let
+      # For details on these options, See
+      # https://github.com/oxalica/rust-overlay?tab=readme-ov-file#cheat-sheet-common-usage-of-rust-bin
+      #
+      # Channel of the Rust toolchain (stable or beta).
+      rustChannel = "stable";
+      # Version (latest or specific date/semantic version)
+      rustVersion = "latest";
+      # Profile (default or minimal)
+      rustProfile = "default";
+    in
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
 
-          # https://github.com/rust-lang/rust-bindgen#environment-variables
-          LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
+      imports = [
+        inputs.treefmt-nix.flakeModule
+      ];
 
-          shellHook = ''
-            export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
-            export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
-          '';
+      perSystem =
+        {
+          config,
+          system,
+          pkgs,
+          lib,
+          craneLib,
+          commonArgs,
+          ...
+        }:
+        {
+          _module.args = {
+            pkgs = import nixpkgs {
+              inherit system;
+              overlays = [ inputs.rust-overlay.overlays.default ];
+            };
+            craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (
+              pkgs: pkgs.rust-bin.${rustChannel}.${rustVersion}.${rustProfile}
+            );
+            commonArgs = {
+              # You may have to set the package name and the version explicitly.
+              # pname = "name_of_your_package";
+              # version = "version";
 
-          # Add precompiled library to rustc search path
-          RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
-            # add libraries here (e.g. pkgs.libvmi)
-          ]);
+              # Depending on your code base, you may have to customize the
+              # source filtering to include non-standard files during the build.
+              # See
+              # https://crane.dev/source-filtering.html?highlight=source#source-filtering
+              src = craneLib.cleanCargoSource (craneLib.path ./.);
 
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
+              # nativeBuildInputs = with pkgs; [
+              #   pkg-config
+              # ];
 
+              # buildInputs = with pkgs; [
+              #   openssl
+              # ];
+            };
+          };
 
-          # Add glibc, clang, glib, and other headers to bindgen search path
-          BINDGEN_EXTRA_CLANG_ARGS =
-          # Includes normal include path
-          (builtins.map (a: ''-I"${a}/include"'') [
-            # add dev libraries here (e.g. pkgs.libvmi.dev)
-            pkgs.glibc.dev
-          ])
-          # Includes with special directory paths
-          ++ [
-            ''-I"${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"''
-            ''-I"${pkgs.glib.dev}/include/glib-2.0"''
-            ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
-          ];
+          # Build the executable package.
+          packages.default = craneLib.buildPackage (
+            commonArgs
+            // {
+              cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+            }
+          );
+
+          devShells.default = craneLib.devShell {
+            inputsFrom = [
+              # Disable this when you first generate Cargo.lock
+              config.packages.default
+            ];
+
+            packages = [
+              pkgs.rust-analyzer-unwrapped
+              # If your repository is a polyglot project, add other dependencies
+              # such as corepack, typescript, etc.
+            ];
+
+            RUST_SRC_PATH = "${
+              pkgs.rust-bin.${rustChannel}.${rustVersion}.rust-src
+            }/lib/rustlib/src/rust/library";
+          };
+
+          treefmt = {
+            projectRootFile = "flake.nix";
+            settings.excludes = [
+              ".direnv/*"
+              "target/*"
+              # "node_modules/*"
+            ];
+            programs = {
+              actionlint.enable = true;
+              nixfmt.enable = true;
+              rustfmt.enable = true;
+              zizmor.enable = true;
+            };
+          };
         };
-      }
-    );
+    };
 }
