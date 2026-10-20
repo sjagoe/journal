@@ -89,7 +89,7 @@ fn make_entries(
         .collect::<HashMap<_, _>>();
 
     // Map filename to entry name and last changed date
-    let mut filenames_map: HashMap<String, Option<(&String, String)>> = HashMap::new();
+    let mut filenames_map: HashMap<String, String> = HashMap::new();
 
     let mut walk = match repo.revwalk() {
         Ok(walk) => walk,
@@ -163,8 +163,7 @@ fn make_entries(
                 let time = timestamp.to_offset(offset);
 
                 if let Ok(commit_time) = time.format(TIME_FORMAT) {
-                    println!("{}: {}", commit_time, entry_name);
-                    filenames_map.insert(name.into(), Some((entry_name, commit_time)));
+                    filenames_map.insert(name.into(), commit_time);
                 }
             }
 
@@ -174,10 +173,11 @@ fn make_entries(
         }
     }
 
-    for (filename, data) in filenames_map.iter() {
-        match data {
-            Some((entry_name, time)) => {
-                let path = Path::new(&filename);
+    for entry_name in entry_names.iter() {
+        let file = filename(entry_name);
+        match filenames_map.get(&file) {
+            Some(time) => {
+                let path = Path::new(&file);
                 let status = match repo.status_file(&path) {
                     Ok(status) => Some(status),
                     Err(_) => None,
