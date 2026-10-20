@@ -1,6 +1,8 @@
+use std::path::Path;
+
 use color_eyre::Result;
 
-use git2::Repository;
+use git2::{Object, Repository, Status};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -22,18 +24,61 @@ pub enum ActivePane {
 struct EntryContent {
     name: String,
     last_modified: String,
-    dirty: bool,
-    index: bool,
+    status: Option<Status>,
 }
 
 impl EntryContent {
-    pub fn from_repo(name: &String, _repo: &Repository) -> EntryContent {
+    pub fn from_repo(name: &String, repo: &Repository) -> EntryContent {
+        let filename: String = format!("{}.age", &name);
+        let path = Path::new(&filename);
+        let status = match repo.status_file(&path) {
+            Ok(status) => Some(status),
+            Err(_) => None,
+        };
+
+        // let commit: Option<Object> = match args.commit_id {
+        //     Some(commit_id) => match repo.revparse_single("HEAD") {
+        //         Ok(object) => Some(object),
+        //         Err(e) => panic!("Failed to get commit {}", e),
+        //     },
+        //     _ => None,
+        // };
+
         EntryContent {
             name: name.to_string(),
-            last_modified: "2020-09-13 21:13:02".to_string(),
-            dirty: false,
-            index: false,
+            last_modified: "2020-09-13 21:13".to_string(),
+            status,
         }
+    }
+
+    pub fn status(&self) -> String {
+        let mut index = "?";
+        let mut wt = "?";
+
+        if let Some(status) = self.status {
+            index = " ";
+            wt = " ";
+            if status.is_index_deleted() {
+                index = "D";
+            } else if status.is_index_modified() || status.is_index_typechange() {
+                index = "M";
+            } else if status.is_index_new() {
+                index = "A";
+            } else if status.is_index_renamed() {
+                index = "R";
+            }
+            if status.is_wt_deleted() {
+                wt = "D";
+            } else if status.is_wt_modified() || status.is_wt_typechange() {
+                wt = "M";
+            } else if status.is_wt_new() {
+                wt = "A";
+            } else if status.is_wt_renamed() {
+                wt = "R";
+            }
+        }
+
+        format!("{}{}", index, wt)
     }
 }
 
@@ -46,7 +91,12 @@ pub struct EntriesPane<'a> {
 }
 
 impl<'a> EntriesPane<'a> {
-    pub fn new(repo: &'a Repository, entry_names: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane<'a> {
+    pub fn new(
+        repo: &'a Repository,
+        entry_names: Vec<String>,
+        pane_kind: ActivePane,
+        active_pane: &ActivePane,
+    ) -> EntriesPane<'a> {
         let mut entries: Vec<EntryContent> = vec![];
 
         for item in entry_names.iter() {
@@ -98,12 +148,17 @@ impl Drawable for EntriesPane<'_> {
             } else {
                 Style::default().fg(Color::Gray)
             };
+
             let line = Line::from(vec![
                 Span::styled(
-                    format!("{:20}", &item.last_modified),
+                    format!("{} ", item.status()),
                     style.clone().add_modifier(Modifier::DIM),
                 ),
-                Span::styled(&item.name , style),
+                Span::styled(
+                    format!("{:18}", &item.last_modified),
+                    style.clone().add_modifier(Modifier::DIM),
+                ),
+                Span::styled(&item.name, style),
             ]);
             list_items.push(ListItem::new(line));
         }
