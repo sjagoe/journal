@@ -49,7 +49,7 @@ fn main() -> Result<()> {
 
     let journal = Journal::from_file(&entries_path, &repo);
 
-    let mut app: app::App = app::App::new(&config, &repo, &journal);
+    let mut app: app::App = app::App::new(&config, &journal);
 
     let mut terminal = tui::init()?;
     run_app(&mut terminal, &mut app)?;

@@ -17,7 +17,7 @@ use serde::Deserialize;
 
 mod entries_pane;
 
-use crate::app::entries_page::entries_pane::{ActivePane, EntriesPane};
+use crate::{app::entries_page::entries_pane::{ActivePane, EntriesPane}, journal::{Journal, JournalSection}};
 use crate::config::Config;
 use crate::traits::{Drawable, Navigable};
 
@@ -29,38 +29,23 @@ pub struct Entries {
 }
 
 pub struct EntriesPage<'a> {
-    _documents: Vec<String>,
-    repo: &'a Repository,
-    general_pane: EntriesPane,
-    narrative_pane: EntriesPane,
+    general_pane: EntriesPane<'a>,
+    narrative_pane: EntriesPane<'a>,
     active_pane: ActivePane,
 }
 
 impl<'a> EntriesPage<'a> {
-    pub fn new(config: &Config, repo: &'a Repository) -> EntriesPage<'a> {
-        let mut entries_path = PathBuf::new();
-        entries_path.push(&config.journal_path);
-        entries_path.push("entries.json");
-
+    pub fn new(journal: &'a Journal) -> EntriesPage<'a> {
         let active_pane = ActivePane::General;
 
-        let file = File::open(entries_path).expect("Unable to open entries data");
-        let reader = BufReader::new(file);
-        let entries: Entries =
-            serde_json::from_reader(reader).expect("Unable to deserialize entries");
-
         EntriesPage {
-            _documents: entries.documents,
-            repo: repo,
             general_pane: EntriesPane::new(
-                &repo,
-                entries.general,
+                &journal.general,
                 ActivePane::General,
                 &active_pane,
             ),
             narrative_pane: EntriesPane::new(
-                &repo,
-                entries.narrative,
+                &journal.narrative,
                 ActivePane::Narrative,
                 &active_pane,
             ),

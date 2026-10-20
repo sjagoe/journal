@@ -1,7 +1,7 @@
 use git2::Repository;
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
@@ -15,11 +15,11 @@ mod entries_page;
 pub mod events;
 mod pagination;
 
-use crate::{app::entries_page::EntriesPage, journal::Journal};
 use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::errors::JournalError;
 use crate::traits::{Drawable, Navigable};
+use crate::{app::entries_page::EntriesPage, journal::Journal};
 
 pub struct Redraw(pub bool);
 
@@ -31,11 +31,11 @@ pub struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub fn new(config: &Config, repo: &'a Repository, journal: &'a Journal) -> App<'a> {
+    pub fn new(config: &Config, journal: &'a Journal) -> App<'a> {
         App {
             _config: config.clone(),
             journal,
-            entries_page: EntriesPage::new(config, repo),
+            entries_page: EntriesPage::new(journal),
             height: 0,
         }
     }

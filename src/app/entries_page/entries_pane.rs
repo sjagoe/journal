@@ -16,8 +16,11 @@ use time::UtcOffset;
 use time::macros::format_description;
 use time::{Timestamp, format_description::StaticFormatDescription};
 
-use crate::traits::{Drawable, Navigable};
 use crate::{app::pagination::pagination, errors::JournalError};
+use crate::{
+    journal::JournalSection,
+    traits::{Drawable, Navigable},
+};
 
 static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
@@ -191,26 +194,21 @@ fn make_entries(
     Ok(entries)
 }
 
-pub struct EntriesPane {
-    entries: Vec<EntryContent>,
+pub struct EntriesPane<'a> {
+    section: &'a JournalSection,
     selected_index: usize,
     active: bool,
     pane_kind: ActivePane,
 }
 
-impl EntriesPane {
+impl<'a> EntriesPane<'a> {
     pub fn new(
-        repo: &Repository,
-        entry_names: Vec<String>,
+        section: &'a JournalSection,
         pane_kind: ActivePane,
         active_pane: &ActivePane,
-    ) -> EntriesPane {
-        let entries = match make_entries(repo, &entry_names) {
-            Ok(entries) => entries,
-            Err(e) => panic!("Unable to load entries! {}", e),
-        };
+    ) -> EntriesPane<'a> {
         EntriesPane {
-            entries,
+            section,
             selected_index: 0,
             active: active_pane == &pane_kind,
             pane_kind,
@@ -218,7 +216,7 @@ impl EntriesPane {
     }
 
     fn len(&self) -> usize {
-        self.entries.len()
+        self.section.len()
     }
 
     pub fn activate(&mut self, active_pane: &ActivePane) {
@@ -226,7 +224,7 @@ impl EntriesPane {
     }
 }
 
-impl Drawable for EntriesPane {
+impl Drawable for EntriesPane<'_> {
     fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
         let viewport = content_block.inner(area);
 
@@ -234,14 +232,14 @@ impl Drawable for EntriesPane {
 
         let visible = viewport.height;
         let (_page, _pages, page_start_index) =
-            pagination(self.entries.len(), visible.into(), self.selected_index);
+            pagination(self.len(), visible.into(), self.selected_index);
 
-        let end_slice = if page_start_index + usize::from(visible) >= self.entries.len() {
-            self.entries.len()
+        let end_slice = if page_start_index + usize::from(visible) >= self.len() {
+            self.len()
         } else {
             page_start_index + usize::from(visible)
         };
-        let display_items = &self.entries[page_start_index..end_slice];
+        let display_items = &self.section.entries[page_start_index..end_slice];
 
         for (pos, item) in display_items.iter().enumerate() {
             let style = if pos + page_start_index == self.selected_index {
@@ -256,7 +254,7 @@ impl Drawable for EntriesPane {
 
             let line = Line::from(vec![
                 Span::styled(
-                    format!("{} ", item.status()),
+                    format!("{} ", item.status),
                     style.clone().add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
@@ -295,7 +293,7 @@ impl Drawable for EntriesPane {
     }
 }
 
-impl Navigable for EntriesPane {
+impl Navigable for EntriesPane<'_> {
     fn home(&mut self, _page_size: u16) {
         self.selected_index = 0;
     }
@@ -336,11 +334,10 @@ impl Navigable for EntriesPane {
     }
 
     fn selected_item(&self) -> String {
-        let items = &self.entries;
-        if items.is_empty() {
+        if self.section.is_empty() {
             "".to_string()
         } else {
-            items[self.selected_index].name.to_string()
+            self.section[self.selected_index].name.to_string()
         }
     }
 

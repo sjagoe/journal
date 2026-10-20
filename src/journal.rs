@@ -40,7 +40,7 @@ impl LastChanged {
                 if let Some(e) = walk.push_head().err() {
                     panic!("Error walking repository: {}", e);
                 }
-            },
+            }
             Err(e) => panic!("Error walking repository: {}", e),
         }
 
@@ -108,9 +108,7 @@ impl LastChanged {
             }
         }
 
-        LastChanged {
-            last_changed,
-        }
+        LastChanged { last_changed }
     }
 
     pub fn get(&self, filename: &String) -> Result<String, JournalError> {
@@ -123,27 +121,54 @@ impl LastChanged {
 }
 
 #[derive(Debug, Clone)]
-struct JournalEntry {
-    name: String,
-    status: String,
-    last_changed: String,
+pub struct JournalEntry {
+    pub name: String,
+    pub status: String,
+    pub last_modified: String,
 }
 
 impl JournalEntry {
-    fn new(name: &String, status: &String, last_changed: &String) -> JournalEntry {
+    fn new(name: &String, status: &String, last_modified: &String) -> JournalEntry {
         JournalEntry {
             name: name.clone(),
             status: status.clone(),
-            last_changed: last_changed.clone(),
+            last_modified: last_modified.clone(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct JournalSection {
+    pub entries: Vec<JournalEntry>,
+}
+
+impl JournalSection {
+    fn new(entries: Vec<JournalEntry>) -> JournalSection {
+        JournalSection { entries }
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+impl std::ops::Index<usize> for JournalSection {
+    type Output = JournalEntry;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        return &self.entries[index];
     }
 }
 
 #[derive(Debug)]
 pub struct Journal {
     _documents: Vec<String>,
-    general: Vec<JournalEntry>,
-    narrative: Vec<JournalEntry>,
+    pub general: JournalSection,
+    pub narrative: JournalSection,
 }
 
 fn status(repo: &Repository, filename: &String) -> String {
@@ -178,16 +203,18 @@ fn status(repo: &Repository, filename: &String) -> String {
 }
 
 fn to_entries(repo: &Repository, changes: &LastChanged, items: &Vec<String>) -> Vec<JournalEntry> {
-    items.into_iter().map(|name| {
-        let filename = format!("{}.age", name);
-        let status_str = status(repo, &filename);
-        match changes.get(&name) {
-            Ok(time) => JournalEntry::new(&name, &status_str, &time),
-            Err(_) => JournalEntry::new(&name, &status_str, &"unknown".to_string()),
-        }
-    }).collect()
+    items
+        .into_iter()
+        .map(|name| {
+            let filename = format!("{}.age", name);
+            let status_str = status(repo, &filename);
+            match changes.get(&filename) {
+                Ok(time) => JournalEntry::new(&name, &status_str, &time),
+                Err(_) => JournalEntry::new(&name, &status_str, &"unknown".to_string()),
+            }
+        })
+        .collect()
 }
-
 
 impl Journal {
     pub fn from_file(path: &PathBuf, repo: &Repository) -> Journal {
@@ -198,8 +225,8 @@ impl Journal {
 
         let changes = LastChanged::new(repo);
 
-        let general = to_entries(repo, &changes, &entries.general);
-        let narrative = to_entries(repo, &changes, &entries.narrative);
+        let general = JournalSection::new(to_entries(repo, &changes, &entries.general));
+        let narrative = JournalSection::new(to_entries(repo, &changes, &entries.narrative));
 
         Journal {
             _documents: entries.documents,
