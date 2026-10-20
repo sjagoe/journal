@@ -1,8 +1,8 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use color_eyre::Result;
 
-use git2::{Object, Repository, Status};
+use git2::{ObjectType, Repository, Sort, Status};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -12,8 +12,16 @@ use ratatui::{
     widgets::{Block, List, ListItem},
 };
 
-use crate::app::pagination::pagination;
+use time::UtcOffset;
+use time::macros::format_description;
+use time::{Timestamp, format_description::StaticFormatDescription};
+
 use crate::traits::{Drawable, Navigable};
+use crate::{app::pagination::pagination, errors::JournalError};
+
+static TIME_FORMAT: StaticFormatDescription = format_description!(
+    "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
+);
 
 #[derive(PartialEq)]
 pub enum ActivePane {
@@ -28,25 +36,10 @@ struct EntryContent {
 }
 
 impl EntryContent {
-    pub fn from_repo(name: &String, repo: &Repository) -> EntryContent {
-        let filename: String = format!("{}.age", &name);
-        let path = Path::new(&filename);
-        let status = match repo.status_file(&path) {
-            Ok(status) => Some(status),
-            Err(_) => None,
-        };
-
-        // let commit: Option<Object> = match args.commit_id {
-        //     Some(commit_id) => match repo.revparse_single("HEAD") {
-        //         Ok(object) => Some(object),
-        //         Err(e) => panic!("Failed to get commit {}", e),
-        //     },
-        //     _ => None,
-        // };
-
+    fn new(name: &String, last_modified: &String, status: Option<Status>) -> EntryContent {
         EntryContent {
             name: name.to_string(),
-            last_modified: "2020-09-13 21:13".to_string(),
+            last_modified: last_modified.to_string(),
             status,
         }
     }
@@ -82,6 +75,122 @@ impl EntryContent {
     }
 }
 
+fn make_entries(
+    repo: &Repository,
+    entry_names: &Vec<String>,
+) -> Result<Vec<EntryContent>, JournalError> {
+    let mut entries: Vec<EntryContent> = vec![];
+
+    let filename = |i| format!("{}.age", i);
+
+    let filenames: HashMap<String, &String> = entry_names
+        .into_iter()
+        .map(|x| (filename(x), x))
+        .collect::<HashMap<_, _>>();
+
+    // Map filename to entry name and last changed date
+    let mut filenames_map: HashMap<String, Option<(&String, String)>> = HashMap::new();
+
+    let mut walk = match repo.revwalk() {
+        Ok(walk) => walk,
+        Err(e) => panic!("Error walking repository: {}", e),
+    };
+
+    match walk.set_sorting(Sort::TOPOLOGICAL) {
+        Ok(_) => match walk.push_head() {
+            Ok(_) => {}
+            Err(e) => panic!("Error walking repository: {}", e),
+        },
+        Err(e) => panic!("Error walking repository: {}", e),
+    }
+
+    for item in walk {
+        let Some(oid) = item.ok() else {
+            continue;
+        };
+
+        let Ok(object) = repo.find_object(oid, Some(ObjectType::Commit)) else {
+            continue;
+        };
+
+        let Some(commit) = object.as_commit() else {
+            continue;
+        };
+
+        let Some(tree) = commit.tree().ok() else {
+            continue;
+        };
+
+        for parent in commit.parents() {
+            let Some(parent_tree) = parent.tree().ok() else {
+                continue;
+            };
+
+            let Some(diff) = repo
+                .diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)
+                .ok()
+            else {
+                continue;
+            };
+
+            for delta in diff.deltas() {
+                let file = delta.new_file();
+                let Some(path) = file.path() else {
+                    continue;
+                };
+                let Some(name) = path.to_str() else {
+                    continue;
+                };
+
+                if filenames_map.contains_key(name) {
+                    continue;
+                }
+                let Some(entry_name) = filenames.get(name) else {
+                    continue;
+                };
+
+                let time_raw = commit.time();
+
+                let Some(offset) =
+                    UtcOffset::from_whole_seconds(time_raw.offset_minutes() * 60).ok()
+                else {
+                    continue;
+                };
+                let Some(timestamp) = Timestamp::from_seconds(time_raw.seconds()).ok() else {
+                    continue;
+                };
+
+                let time = timestamp.to_offset(offset);
+
+                if let Ok(commit_time) = time.format(TIME_FORMAT) {
+                    println!("{}: {}", commit_time, entry_name);
+                    filenames_map.insert(name.into(), Some((entry_name, commit_time)));
+                }
+            }
+
+            if filenames_map.len() == filenames.len() {
+                break;
+            }
+        }
+    }
+
+    for (filename, data) in filenames_map.iter() {
+        match data {
+            Some((entry_name, time)) => {
+                let path = Path::new(&filename);
+                let status = match repo.status_file(&path) {
+                    Ok(status) => Some(status),
+                    Err(_) => None,
+                };
+                entries.push(EntryContent::new(entry_name, time, status));
+            }
+            None => panic!("Failed to parse all entries time stamps"),
+        }
+    }
+
+    Ok(entries)
+}
+
 pub struct EntriesPane<'a> {
     repo: &'a Repository,
     entries: Vec<EntryContent>,
@@ -97,12 +206,10 @@ impl<'a> EntriesPane<'a> {
         pane_kind: ActivePane,
         active_pane: &ActivePane,
     ) -> EntriesPane<'a> {
-        let mut entries: Vec<EntryContent> = vec![];
-
-        for item in entry_names.iter() {
-            entries.push(EntryContent::from_repo(item, repo));
-        }
-
+        let entries = match make_entries(repo, &entry_names) {
+            Ok(entries) => entries,
+            Err(e) => panic!("Unable to load entries! {}", e),
+        };
         EntriesPane {
             repo,
             entries,
@@ -155,7 +262,7 @@ impl Drawable for EntriesPane<'_> {
                     style.clone().add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
-                    format!("{:18}", &item.last_modified),
+                    format!("{:30}", &item.last_modified),
                     style.clone().add_modifier(Modifier::DIM),
                 ),
                 Span::styled(&item.name, style),
