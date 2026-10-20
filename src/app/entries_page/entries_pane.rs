@@ -21,18 +21,16 @@ pub enum ActivePane {
 pub struct EntriesPane {
     entries: Vec<String>,
     selected_index: usize,
-    pane_name: String,
     active: bool,
     pane_kind: ActivePane,
 }
 
 impl EntriesPane {
-    pub fn new(name: String, entries: Vec<String>, pane_kind: ActivePane) -> EntriesPane {
+    pub fn new(entries: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane {
         EntriesPane {
             entries,
             selected_index: 0,
-            pane_name: name,
-            active: false,
+            active: active_pane == &pane_kind,
             pane_kind,
         }
     }
@@ -74,11 +72,11 @@ impl Drawable for EntriesPane {
                 Style::default().fg(Color::Gray)
             };
             let line = Line::from(vec![
-                Span::styled(
-                    format!("{:10}", "ref"),
-                    Style::default().add_modifier(Modifier::DIM),
-                ),
-                Span::styled(item, style),
+                Span::styled(format!("{:10}", item) , style),
+                // Span::styled(
+                //     format!("{:10}", "ref"),
+                //     style.clone().add_modifier(Modifier::DIM),
+                // ),
             ]);
             list_items.push(ListItem::new(line));
         }
@@ -90,6 +88,10 @@ impl Drawable for EntriesPane {
     }
 
     fn title(&self) -> Vec<Span<'_>> {
+        let name = match self.pane_kind {
+            ActivePane::General => "General Entries",
+            ActivePane::Narrative => "Narrative Entries",
+        };
         let mut parts = vec![Span::from(" ")];
         let fg = match self.active {
             true => Color::Green,
@@ -97,7 +99,7 @@ impl Drawable for EntriesPane {
         };
 
         parts.push(Span::styled(
-            self.pane_name.clone(),
+            name,
             Style::default().fg(fg).add_modifier(Modifier::BOLD),
         ));
 

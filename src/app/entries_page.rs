@@ -12,14 +12,13 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Padding},
 };
+use serde::Deserialize;
 
 mod entries_pane;
 
 use crate::app::entries_page::entries_pane::{ActivePane, EntriesPane};
 use crate::config::Config;
 use crate::traits::{Drawable, Navigable};
-
-use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Entries {
@@ -41,30 +40,26 @@ impl EntriesPage {
         entries_path.push(&config.journal_path);
         entries_path.push("entries.json");
 
+        let active_pane = ActivePane::General;
+
         let file = File::open(entries_path).expect("Unable to open entries data");
         let reader = BufReader::new(file);
         let entries: Entries =
             serde_json::from_reader(reader).expect("Unable to deserialize entries");
 
-        let active_pane = ActivePane::General;
-        let mut general_pane = EntriesPane::new(
-            "General Entries".into(),
-            entries.general,
-            ActivePane::General,
-        );
-        general_pane.activate(&active_pane);
-        let mut narrative_pane = EntriesPane::new(
-            "Narrative Entries".into(),
-            entries.narrative,
-            ActivePane::Narrative,
-        );
-        narrative_pane.activate(&active_pane);
-
         EntriesPage {
             _documents: entries.documents,
-            general_pane: general_pane,
-            narrative_pane: narrative_pane,
-            active_pane: ActivePane::General,
+            general_pane: EntriesPane::new(
+                entries.general,
+                ActivePane::General,
+                &active_pane,
+            ),
+            narrative_pane: EntriesPane::new(
+                entries.narrative,
+                ActivePane::Narrative,
+                &active_pane,
+            ),
+            active_pane,
         }
     }
 
