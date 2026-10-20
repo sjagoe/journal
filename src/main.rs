@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, path::PathBuf};
 use std::io::BufReader;
 
 use color_eyre::Result;
@@ -11,6 +11,7 @@ use ratatui::{Terminal, backend::Backend};
 mod app;
 mod config;
 mod errors;
+mod journal;
 mod traits;
 mod tui;
 mod ui;
@@ -18,6 +19,7 @@ mod ui;
 use crate::{
     app::{App, events::Event},
     config::Config,
+    journal::Journal,
     ui::ui,
 };
 
@@ -41,7 +43,13 @@ fn main() -> Result<()> {
         Err(e) => panic!("failed to open: {}", e),
     };
 
-    let mut app: app::App = app::App::new(&config, &repo);
+    let mut entries_path = PathBuf::new();
+    entries_path.push(&config.journal_path);
+    entries_path.push("entries.json");
+
+    let journal = Journal::from_file(&entries_path, &repo);
+
+    let mut app: app::App = app::App::new(&config, &repo, &journal);
 
     let mut terminal = tui::init()?;
     run_app(&mut terminal, &mut app)?;

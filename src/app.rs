@@ -15,7 +15,7 @@ mod entries_page;
 pub mod events;
 mod pagination;
 
-use crate::app::entries_page::EntriesPage;
+use crate::{app::entries_page::EntriesPage, journal::Journal};
 use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::errors::JournalError;
@@ -25,14 +25,16 @@ pub struct Redraw(pub bool);
 
 pub struct App<'a> {
     _config: Config,
+    journal: &'a Journal,
     entries_page: EntriesPage<'a>,
     height: u16,
 }
 
 impl<'a> App<'a> {
-    pub fn new(config: &Config, repo: &'a Repository) -> App<'a> {
+    pub fn new(config: &Config, repo: &'a Repository, journal: &'a Journal) -> App<'a> {
         App {
             _config: config.clone(),
+            journal,
             entries_page: EntriesPage::new(config, repo),
             height: 0,
         }

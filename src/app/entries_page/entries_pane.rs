@@ -191,27 +191,25 @@ fn make_entries(
     Ok(entries)
 }
 
-pub struct EntriesPane<'a> {
-    repo: &'a Repository,
+pub struct EntriesPane {
     entries: Vec<EntryContent>,
     selected_index: usize,
     active: bool,
     pane_kind: ActivePane,
 }
 
-impl<'a> EntriesPane<'a> {
+impl EntriesPane {
     pub fn new(
-        repo: &'a Repository,
+        repo: &Repository,
         entry_names: Vec<String>,
         pane_kind: ActivePane,
         active_pane: &ActivePane,
-    ) -> EntriesPane<'a> {
+    ) -> EntriesPane {
         let entries = match make_entries(repo, &entry_names) {
             Ok(entries) => entries,
             Err(e) => panic!("Unable to load entries! {}", e),
         };
         EntriesPane {
-            repo,
             entries,
             selected_index: 0,
             active: active_pane == &pane_kind,
@@ -228,7 +226,7 @@ impl<'a> EntriesPane<'a> {
     }
 }
 
-impl Drawable for EntriesPane<'_> {
+impl Drawable for EntriesPane {
     fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
         let viewport = content_block.inner(area);
 
@@ -297,7 +295,7 @@ impl Drawable for EntriesPane<'_> {
     }
 }
 
-impl Navigable for EntriesPane<'_> {
+impl Navigable for EntriesPane {
     fn home(&mut self, _page_size: u16) {
         self.selected_index = 0;
     }

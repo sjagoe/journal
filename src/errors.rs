@@ -44,6 +44,7 @@ pub enum ErrorKind {
     Subprocess,
     TemporaryFile,
     TerminalInit,
+    RepositoryWalkError,
 }
 
 impl ErrorKind {
@@ -52,6 +53,7 @@ impl ErrorKind {
             ErrorKind::Subprocess => "Failed to execute subprocess",
             ErrorKind::TemporaryFile => "Failed to write temporary file",
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
+            ErrorKind::RepositoryWalkError => "Failed to walk repository commits",
         }
     }
 }

@@ -31,8 +31,8 @@ pub struct Entries {
 pub struct EntriesPage<'a> {
     _documents: Vec<String>,
     repo: &'a Repository,
-    general_pane: EntriesPane<'a>,
-    narrative_pane: EntriesPane<'a>,
+    general_pane: EntriesPane,
+    narrative_pane: EntriesPane,
     active_pane: ActivePane,
 }
 
