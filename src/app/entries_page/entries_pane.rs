@@ -1,5 +1,6 @@
 use color_eyre::Result;
 
+use git2::Repository;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -18,16 +19,18 @@ pub enum ActivePane {
     Narrative,
 }
 
-pub struct EntriesPane {
+pub struct EntriesPane<'a> {
+    repo: &'a Repository,
     entries: Vec<String>,
     selected_index: usize,
     active: bool,
     pane_kind: ActivePane,
 }
 
-impl EntriesPane {
-    pub fn new(entries: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane {
+impl<'a> EntriesPane<'a> {
+    pub fn new(repo: &'a Repository, entries: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane<'a> {
         EntriesPane {
+            repo,
             entries,
             selected_index: 0,
             active: active_pane == &pane_kind,
@@ -44,7 +47,7 @@ impl EntriesPane {
     }
 }
 
-impl Drawable for EntriesPane {
+impl Drawable for EntriesPane<'_> {
     fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
         let viewport = content_block.inner(area);
 
@@ -108,7 +111,7 @@ impl Drawable for EntriesPane {
     }
 }
 
-impl Navigable for EntriesPane {
+impl Navigable for EntriesPane<'_> {
     fn home(&mut self, _page_size: u16) {
         self.selected_index = 0;
     }

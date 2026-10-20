@@ -1,3 +1,4 @@
+use git2::Repository;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -22,20 +23,21 @@ use crate::traits::{Drawable, Navigable};
 
 pub struct Redraw(pub bool);
 
-pub struct App {
+pub struct App<'a> {
     _config: Config,
-    entries_page: EntriesPage,
+    entries_page: EntriesPage<'a>,
     height: u16,
 }
 
-impl App {
-    pub fn new(config: &Config) -> App {
+impl<'a> App<'a> {
+    pub fn new(config: &Config, repo: &'a Repository) -> App<'a> {
         App {
             _config: config.clone(),
-            entries_page: EntriesPage::new(config),
+            entries_page: EntriesPage::new(config, repo),
             height: 0,
         }
     }
+
     pub fn title(&self) -> Vec<Span<'_>> {
         let mut parts = vec![Span::from(" ")];
 

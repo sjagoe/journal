@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use color_eyre::Result;
 
+use git2::Repository;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -27,15 +28,16 @@ pub struct Entries {
     narrative: Vec<String>,
 }
 
-pub struct EntriesPage {
+pub struct EntriesPage<'a> {
     _documents: Vec<String>,
-    general_pane: EntriesPane,
-    narrative_pane: EntriesPane,
+    repo: &'a Repository,
+    general_pane: EntriesPane<'a>,
+    narrative_pane: EntriesPane<'a>,
     active_pane: ActivePane,
 }
 
-impl EntriesPage {
-    pub fn new(config: &Config) -> EntriesPage {
+impl<'a> EntriesPage<'a> {
+    pub fn new(config: &Config, repo: &'a Repository) -> EntriesPage<'a> {
         let mut entries_path = PathBuf::new();
         entries_path.push(&config.journal_path);
         entries_path.push("entries.json");
@@ -49,12 +51,15 @@ impl EntriesPage {
 
         EntriesPage {
             _documents: entries.documents,
+            repo: repo,
             general_pane: EntriesPane::new(
+                &repo,
                 entries.general,
                 ActivePane::General,
                 &active_pane,
             ),
             narrative_pane: EntriesPane::new(
+                &repo,
                 entries.narrative,
                 ActivePane::Narrative,
                 &active_pane,
@@ -62,16 +67,9 @@ impl EntriesPage {
             active_pane,
         }
     }
-
-    fn current_pane(&mut self) -> &mut EntriesPane {
-        match self.active_pane {
-            ActivePane::General => &mut self.general_pane,
-            ActivePane::Narrative => &mut self.narrative_pane,
-        }
-    }
 }
 
-impl Drawable for EntriesPage {
+impl Drawable for EntriesPage<'_> {
     fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
         let viewport = content_block.inner(area);
 
@@ -107,29 +105,53 @@ impl Drawable for EntriesPage {
     }
 }
 
-impl Navigable for EntriesPage {
+impl Navigable for EntriesPage<'_> {
     fn home(&mut self, page_size: u16) {
-        self.current_pane().home(page_size);
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.home(page_size);
     }
 
     fn end(&mut self, page_size: u16) {
-        self.current_pane().end(page_size);
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.end(page_size);
     }
 
     fn pagedown(&mut self, page_size: u16) {
-        self.current_pane().pagedown(page_size);
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.pagedown(page_size);
     }
 
     fn pageup(&mut self, page_size: u16) {
-        self.current_pane().pageup(page_size);
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.pageup(page_size);
     }
 
     fn next_selection(&mut self) {
-        self.current_pane().next_selection();
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.next_selection();
     }
 
     fn previous_selection(&mut self) {
-        self.current_pane().previous_selection();
+        let pane = match self.active_pane {
+            ActivePane::General => &mut self.general_pane,
+            ActivePane::Narrative => &mut self.narrative_pane,
+        };
+        pane.previous_selection();
     }
 
     fn select(&self) -> Option<String> {

@@ -5,6 +5,7 @@ use color_eyre::Result;
 use dirs::config_dir;
 
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
+use git2::Repository;
 use ratatui::{Terminal, backend::Backend};
 
 mod app;
@@ -35,7 +36,12 @@ fn main() -> Result<()> {
 
     println!("{}", config);
 
-    let mut app: app::App = app::App::new(&config);
+    let repo = match Repository::open(&config.journal_path) {
+        Ok(repo) => repo,
+        Err(e) => panic!("failed to open: {}", e),
+    };
+
+    let mut app: app::App = app::App::new(&config, &repo);
 
     let mut terminal = tui::init()?;
     run_app(&mut terminal, &mut app)?;
