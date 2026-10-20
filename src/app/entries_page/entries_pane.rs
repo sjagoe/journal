@@ -342,8 +342,4 @@ impl Navigable for EntriesPane<'_> {
     }
 
     fn switch_pane(&mut self) {}
-
-    fn next_tick(&mut self, _block: bool) -> Result<()> {
-        Ok(())
-    }
 }

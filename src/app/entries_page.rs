@@ -164,8 +164,4 @@ impl Navigable for EntriesPage<'_> {
         self.general_pane.activate(&new_active);
         self.active_pane = new_active;
     }
-
-    fn next_tick(&mut self, _block: bool) -> Result<()> {
-        Ok(())
-    }
 }

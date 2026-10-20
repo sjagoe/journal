@@ -15,7 +15,6 @@ pub enum Event {
     SwitchPane,
     // ExternalEditor,
     Exit,
-    // Tick,
     Invalid,
 }
 
@@ -76,7 +75,6 @@ impl From<&Event> for ActionInfo {
             Event::SwitchPane => ("Tab", "Navigate between entry types"),
             // We never want to see this but have to define it
             Event::Invalid => ("invalid", "invalid"),
-            // Event::Tick => ("invalid", "invalid"),
         };
         ActionInfo {
             key: key.to_string(),
