@@ -93,11 +93,11 @@ impl Drawable for EntriesPane<'_> {
             let line = Line::from(vec![
                 Span::styled(
                     format!("{} ", item.status),
-                    style.clone().add_modifier(Modifier::DIM),
+                    style.add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
-                    format!("{:30}", &item.last_modified),
-                    style.clone().add_modifier(Modifier::DIM),
+                    format!("{:30}", item.last_modified),
+                    style.add_modifier(Modifier::DIM),
                 ),
                 Span::styled(&item.name, style),
             ]);

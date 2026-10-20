@@ -78,7 +78,7 @@ impl<'a> App<'a> {
     }
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-        let actions = vec![Event::Exit];
+        let actions = [Event::Exit];
 
         let keys_hint = actions
             .iter()

@@ -44,8 +44,6 @@ impl LastChanged {
             Err(e) => panic!("Error walking repository: {}", e),
         }
 
-        // let iter: dyn Iterator<Item = Result<Oid, git2::Error>> = &walk.into_iter();
-
         for item in walk {
             let Some(oid) = item.ok() else {
                 continue;
@@ -128,11 +126,11 @@ pub struct JournalEntry {
 }
 
 impl JournalEntry {
-    fn new(name: &String, status: &String, last_modified: &String) -> JournalEntry {
+    fn new(name: &str, status: &str, last_modified: &str) -> JournalEntry {
         JournalEntry {
-            name: name.clone(),
-            status: status.clone(),
-            last_modified: last_modified.clone(),
+            name: name.to_owned(),
+            status: status.to_owned(),
+            last_modified: last_modified.to_owned(),
         }
     }
 }
@@ -160,7 +158,7 @@ impl std::ops::Index<usize> for JournalSection {
     type Output = JournalEntry;
 
     fn index(&self, index: usize) -> &Self::Output {
-        return &self.entries[index];
+        &self.entries[index]
     }
 }
 
@@ -176,7 +174,7 @@ fn status(repo: &Repository, filename: &String) -> String {
     let mut index = "?";
     let mut wt = "?";
 
-    if let Some(status) = repo.status_file(&path).ok() {
+    if let Ok(status) = repo.status_file(path) {
         index = " ";
         wt = " ";
         if status.is_index_deleted() {
@@ -202,15 +200,15 @@ fn status(repo: &Repository, filename: &String) -> String {
     format!("{}{}", index, wt)
 }
 
-fn to_entries(repo: &Repository, changes: &LastChanged, items: &Vec<String>) -> Vec<JournalEntry> {
+fn to_entries(repo: &Repository, changes: &LastChanged, items: &[String]) -> Vec<JournalEntry> {
     items
-        .into_iter()
+        .iter()
         .map(|name| {
             let filename = format!("{}.age", name);
             let status_str = status(repo, &filename);
             match changes.get(&filename) {
-                Ok(time) => JournalEntry::new(&name, &status_str, &time),
-                Err(_) => JournalEntry::new(&name, &status_str, &"unknown".to_string()),
+                Ok(time) => JournalEntry::new(name, &status_str, &time),
+                Err(_) => JournalEntry::new(name, &status_str, "unknown"),
             }
         })
         .collect()
