@@ -1,4 +1,3 @@
-use git2::Repository;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -12,6 +11,7 @@ use ratatui::{
 };
 
 mod entries_page;
+mod entry_editor;
 pub mod events;
 mod pagination;
 
@@ -93,10 +93,17 @@ impl<'a> App<'a> {
         f.render_widget(hint, area);
     }
 
+    fn select_item(&self) -> Result<(), JournalError> {
+        Ok(())
+    }
+
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
-            Event::Select => return Ok(Redraw(false)),
+            Event::Select => {
+                self.select_item()?;
+                return Ok(Redraw(true));
+            }
             Event::Home => page.home(self.height),
             Event::End => page.end(self.height),
             Event::PageUp => page.pageup(self.height),
