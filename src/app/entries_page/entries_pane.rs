@@ -19,16 +19,40 @@ pub enum ActivePane {
     Narrative,
 }
 
+struct EntryContent {
+    name: String,
+    last_modified: String,
+    dirty: bool,
+    index: bool,
+}
+
+impl EntryContent {
+    pub fn from_repo(name: &String, _repo: &Repository) -> EntryContent {
+        EntryContent {
+            name: name.to_string(),
+            last_modified: "2020-09-13 21:13:02".to_string(),
+            dirty: false,
+            index: false,
+        }
+    }
+}
+
 pub struct EntriesPane<'a> {
     repo: &'a Repository,
-    entries: Vec<String>,
+    entries: Vec<EntryContent>,
     selected_index: usize,
     active: bool,
     pane_kind: ActivePane,
 }
 
 impl<'a> EntriesPane<'a> {
-    pub fn new(repo: &'a Repository, entries: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane<'a> {
+    pub fn new(repo: &'a Repository, entry_names: Vec<String>, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane<'a> {
+        let mut entries: Vec<EntryContent> = vec![];
+
+        for item in entry_names.iter() {
+            entries.push(EntryContent::from_repo(item, repo));
+        }
+
         EntriesPane {
             repo,
             entries,
@@ -75,11 +99,11 @@ impl Drawable for EntriesPane<'_> {
                 Style::default().fg(Color::Gray)
             };
             let line = Line::from(vec![
-                Span::styled(format!("{:10}", item) , style),
-                // Span::styled(
-                //     format!("{:10}", "ref"),
-                //     style.clone().add_modifier(Modifier::DIM),
-                // ),
+                Span::styled(
+                    format!("{:20}", &item.last_modified),
+                    style.clone().add_modifier(Modifier::DIM),
+                ),
+                Span::styled(&item.name , style),
             ]);
             list_items.push(ListItem::new(line));
         }
@@ -156,7 +180,7 @@ impl Navigable for EntriesPane<'_> {
         if items.is_empty() {
             "".to_string()
         } else {
-            items[self.selected_index].to_string()
+            items[self.selected_index].name.to_string()
         }
     }
 
