@@ -43,18 +43,20 @@ impl JournalError {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     Subprocess,
-    // TemporaryFile,
+    TemporaryFile,
     TerminalInit,
     RepositoryWalkError,
+    Decryption,
 }
 
 impl ErrorKind {
     pub fn as_str(&self) -> &str {
         match *self {
             ErrorKind::Subprocess => "Failed to execute subprocess",
-            // ErrorKind::TemporaryFile => "Failed to write temporary file",
+            ErrorKind::TemporaryFile => "Failed to write temporary file",
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
             ErrorKind::RepositoryWalkError => "Failed to walk repository commits",
+            ErrorKind::Decryption => "Error decrypting entry",
         }
     }
 }

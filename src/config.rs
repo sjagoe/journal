@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    pub editor: Option<Vec<String>>,
+    pub editor: Option<String>,
     pub identity: String,
     pub journal_path: String,
 }
