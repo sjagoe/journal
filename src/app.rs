@@ -105,7 +105,7 @@ impl<'a> App<'a> {
         file.push(&self.config.journal_path);
         file.push(filename);
 
-        let external_editor = EntryEditor::new(&file, "less");
+        let external_editor = EntryEditor::new(&file, &self.config);
         external_editor.display()
     }
 
