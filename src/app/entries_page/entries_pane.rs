@@ -22,6 +22,7 @@ use crate::{
     traits::{Drawable, Navigable},
 };
 
+#[allow(unused)]
 static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
 );
@@ -171,13 +172,13 @@ impl Navigable for EntriesPane<'_> {
         Some(self.section[self.selected_index].name.to_string())
     }
 
-    fn selected_item(&self) -> String {
-        if self.section.is_empty() {
-            "".to_string()
-        } else {
-            self.section[self.selected_index].name.to_string()
-        }
-    }
+    // fn selected_item(&self) -> String {
+    //     if self.section.is_empty() {
+    //         "".to_string()
+    //     } else {
+    //         self.section[self.selected_index].name.to_string()
+    //     }
+    // }
 
     fn switch_pane(&mut self) {}
 }

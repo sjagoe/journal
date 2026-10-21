@@ -31,7 +31,7 @@ pub struct Redraw(pub bool);
 
 pub struct App<'a> {
     config: Config,
-    journal: &'a Journal,
+    _journal: &'a Journal,
     entries_page: EntriesPage<'a>,
     height: u16,
 }
@@ -40,7 +40,7 @@ impl<'a> App<'a> {
     pub fn new(config: &Config, journal: &'a Journal) -> App<'a> {
         App {
             config: config.clone(),
-            journal,
+            _journal: journal,
             entries_page: EntriesPage::new(journal),
             height: 0,
         }
@@ -126,5 +126,5 @@ impl<'a> App<'a> {
         Ok(Redraw(false))
     }
 
-    pub fn error(&mut self, error: JournalError) {}
+    pub fn error(&mut self, _error: JournalError) {}
 }

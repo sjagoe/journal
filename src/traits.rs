@@ -10,7 +10,7 @@ pub trait Navigable {
     fn next_selection(&mut self);
     fn previous_selection(&mut self);
     fn select(&self) -> Option<String>;
-    fn selected_item(&self) -> String;
+    // fn selected_item(&self) -> String;
     fn switch_pane(&mut self);
 }
 

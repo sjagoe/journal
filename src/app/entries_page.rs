@@ -21,13 +21,6 @@ use crate::{app::entries_page::entries_pane::{ActivePane, EntriesPane}, journal:
 use crate::config::Config;
 use crate::traits::{Drawable, Navigable};
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct Entries {
-    documents: Vec<String>,
-    general: Vec<String>,
-    narrative: Vec<String>,
-}
-
 pub struct EntriesPage<'a> {
     general_pane: EntriesPane<'a>,
     narrative_pane: EntriesPane<'a>,
@@ -147,13 +140,13 @@ impl Navigable for EntriesPage<'_> {
         pane.select()
     }
 
-    fn selected_item(&self) -> String {
-        let pane = match self.active_pane {
-            ActivePane::General => &self.general_pane,
-            ActivePane::Narrative => &self.narrative_pane,
-        };
-        pane.selected_item()
-    }
+    // fn selected_item(&self) -> String {
+    //     let pane = match self.active_pane {
+    //         ActivePane::General => &self.general_pane,
+    //         ActivePane::Narrative => &self.narrative_pane,
+    //     };
+    //     pane.selected_item()
+    // }
 
     fn switch_pane(&mut self) {
         let new_active = match self.active_pane {
