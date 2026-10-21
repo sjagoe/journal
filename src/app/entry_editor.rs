@@ -85,10 +85,7 @@ impl EntryEditor {
     pub fn new(entry: &str, config: &Config) -> Result<Self, JournalError> {
         let filename = format!("{}.age", entry);
 
-        let editor = match config.editor {
-            Some(ref editor) => Some(editor.to_owned()),
-            None => None,
-        };
+        let editor = config.editor.as_ref().map(|editor| editor.to_owned());
 
         let entry_editor = EntryEditor {
             identity: config.identity.to_owned(),
@@ -100,7 +97,7 @@ impl EntryEditor {
     }
 
     fn editor_from_string(&self, editor: &str) -> Result<(String, Vec<String>), JournalError> {
-        let parts = split(&editor).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let parts = split(editor).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
         let prog = &parts[0];
         let args = &parts[1..];
         Ok((prog.to_string(), args.to_vec()))
@@ -108,7 +105,7 @@ impl EntryEditor {
 
     fn get_editor_command(&self) -> Result<(String, Vec<String>), JournalError> {
         match self.editor {
-            Some(ref editor) => self.editor_from_string(&editor),
+            Some(ref editor) => self.editor_from_string(editor),
             None => {
                 if let Some(visual_env) = env::var_os("VISUAL") {
                     let pager = visual_env

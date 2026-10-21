@@ -228,8 +228,8 @@ impl Journal {
 
         Journal {
             _documents: entries.documents,
-            general: general,
-            narrative: narrative,
+            general,
+            narrative,
         }
     }
 }
