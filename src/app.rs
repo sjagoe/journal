@@ -99,22 +99,22 @@ impl<'a> App<'a> {
         f.render_widget(hint, area);
     }
 
+    fn edit_entry(&self, entry: &str) -> Result<(), JournalError> {
+        let filename = format!("{}.age", entry);
+        let mut file = PathBuf::new();
+        file.push(&self.config.journal_path);
+        file.push(filename);
+
+        let external_editor = EntryEditor::new(&file, "less");
+        external_editor.display()
+    }
+
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
             Event::Select => {
                 match page.select() {
-                    Some(selection) => {
-                        let filename = format!("{}.age", selection);
-                        let mut file = PathBuf::new();
-                        file.push(&self.config.journal_path);
-                        file.push(filename);
-
-                        let external_editor = EntryEditor::new(&file, "less");
-                        if let Some(e) = external_editor.display().err() {
-                            return Err(e);
-                        };
-                    }
+                    Some(entry) => self.edit_entry(&entry)?,
                     None => {}
                 }
                 return Ok(Redraw(true));
