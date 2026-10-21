@@ -118,7 +118,7 @@ impl LastChanged {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct JournalEntry {
     pub name: String,
     pub status: String,
@@ -135,7 +135,7 @@ impl JournalEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct JournalSection {
     pub entries: Vec<JournalEntry>,
 }
@@ -162,7 +162,7 @@ impl std::ops::Index<usize> for JournalSection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Journal {
     _documents: Vec<String>,
     pub general: JournalSection,
