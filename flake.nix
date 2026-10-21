@@ -3,125 +3,97 @@
   description = "Age-encrypted journaling";
 
   inputs = {
-    flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     treefmt-nix.url = "github:numtide/treefmt-nix";
 
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     crane.url = "github:ipetkov/crane";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  # Add settings for your binary cache.
-  # nixConfig = {
-  #   extra-substituters = [
-  #   ];
-  #   extra-trusted-public-keys = [
-  #   ];
-  # };
-
   outputs =
-    inputs@{ nixpkgs, flake-parts, ... }:
+    { nixpkgs, crane, fenix, flake-utils, ... }:
     let
-      # For details on these options, See
-      # https://github.com/oxalica/rust-overlay?tab=readme-ov-file#cheat-sheet-common-usage-of-rust-bin
-      #
-      # Channel of the Rust toolchain (stable or beta).
-      rustChannel = "stable";
-      # Version (latest or specific date/semantic version)
-      rustVersion = "latest";
-      # Profile (default or minimal)
-      rustProfile = "default";
+      systems = [ "x86_64-linux" "aarch64-linux" ];
+      eachSystem = flake-utils.lib.eachSystem systems;
     in
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+      eachSystem (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          inherit (pkgs) lib;
 
-      imports = [
-        inputs.treefmt-nix.flakeModule
-      ];
+          buildPlatformSuffix = pkgs.lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
 
-      perSystem =
-        {
-          config,
-          system,
-          pkgs,
-          lib,
-          craneLib,
-          commonArgs,
-          ...
-        }:
-        {
-          _module.args = {
-            pkgs = import nixpkgs {
-              inherit system;
-              overlays = [ inputs.rust-overlay.overlays.default ];
-            };
-            craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (
-              pkgs: pkgs.rust-bin.${rustChannel}.${rustVersion}.${rustProfile}
-            );
-            commonArgs = {
-              # You may have to set the package name and the version explicitly.
-              # pname = "name_of_your_package";
-              # version = "version";
+          toolchain =
+            fenix.packages.${system}.stable.toolchain;
+            # with fenix.packages.${system};
+            # combine [
+            #   default.toolchain
+            #   stable.rust-src
+            #   targets.x86_64-pc-windows-gnu.latest.rust-std
+            # ];
 
-              # Depending on your code base, you may have to customize the
-              # source filtering to include non-standard files during the build.
-              # See
-              # https://crane.dev/source-filtering.html?highlight=source#source-filtering
-              src = craneLib.cleanCargoSource (craneLib.path ./.);
+          craneLib = (crane.mkLib pkgs).overrideToolchain (p: toolchain);
 
-              # nativeBuildInputs = with pkgs; [
-              #   pkg-config
-              # ];
+          src = craneLib.cleanCargoSource ./.;
 
-              # buildInputs = with pkgs; [
-              #   openssl
-              # ];
-            };
+          # Common arguments can be set here to avoid repeating them later
+          commonArgs =
+            let
+              cargoArgs = craneLib.crateNameFromCargoToml {
+                inherit src;
+              };
+            in
+              {
+                inherit (cargoArgs) version;
+                inherit src;
+                strictDeps = true;
+
+                buildInputs = [
+                  # Add additional build inputs here
+                ];
+
+                # Additional environment variables can be set directly
+                # MY_CUSTOM_VAR = "some value";
+              };
+
+          # Build *just* the cargo dependencies (of the entire workspace),
+          # so we can reuse all of that work (e.g. via cachix) when running in CI
+          # It is *highly* recommended to use something like cargo-hakari to avoid
+          # cache misses when building individual top-level-crates
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+          journal = craneLib.buildPackage commonArgs // {
+            inherit cargoArtifacts;
+            inherit src;
+            inherit (craneLib.crateNameFromCargoToml {
+              inherit src;
+            }) version;
+            # NB: we disable tests since we'll run them all via cargo-nextest
+            doCheck = false;
           };
+        in
+          {
+            packages.default = journal;
 
-          # Build the executable package.
-          packages.default = craneLib.buildPackage (
-            commonArgs
-            // {
-              cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-            }
-          );
+            devShells.default = craneLib.devShell {
+              # Additional dev-shell environment variables can be set directly
+              # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
 
-          devShells.default = craneLib.devShell {
-            inputsFrom = [
-              # Disable this when you first generate Cargo.lock
-              config.packages.default
-            ];
-
-            packages = [
-              pkgs.rust-analyzer-unwrapped
-              # If your repository is a polyglot project, add other dependencies
-              # such as corepack, typescript, etc.
-            ];
-
-            RUST_SRC_PATH = "${
-              pkgs.rust-bin.${rustChannel}.${rustVersion}.rust-src
-            }/lib/rustlib/src/rust/library";
-          };
-
-          treefmt = {
-            projectRootFile = "flake.nix";
-            settings.excludes = [
-              ".direnv/*"
-              "target/*"
-              # "node_modules/*"
-            ];
-            programs = {
-              actionlint.enable = true;
-              nixfmt.enable = true;
-              rustfmt.enable = true;
-              zizmor.enable = true;
+              # Extra inputs can be added here; cargo and rustc are provided by default.
+              packages = [
+              ];
             };
-          };
-        };
-    };
+          });
 }
