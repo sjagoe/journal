@@ -1,5 +1,10 @@
 use std::{
-    env, fs::{self, File}, io::{self, BufReader}, os::unix::fs::PermissionsExt, path::{Path, PathBuf}, process::Command,
+    env,
+    fs::{self, File},
+    io::{self, BufReader},
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    process::Command,
 };
 
 use age::{
@@ -13,8 +18,8 @@ use age::{
 
 use color_eyre::Result;
 use digest_io::IoWrapper;
-use shell_words::split;
 use sha2::{Digest, Sha256};
+use shell_words::split;
 
 use crate::{
     config::Config,
@@ -51,15 +56,14 @@ fn get_age_decryptor<P: AsRef<Path>>(
     }
 }
 
-
 fn decrypt<P: AsRef<Path>>(
     input_file: P,
     output_file: P,
     identities: &[Box<dyn age::Identity>],
 ) -> Result<(), JournalError> {
     let output_file_mode: u32 = 0o600;
-    let decryptor = get_age_decryptor(input_file)
-        .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+    let decryptor =
+        get_age_decryptor(input_file).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
     decryptor
         .decrypt(identities.iter().map(|i| i.as_ref() as &dyn age::Identity))
         .map_err(|_| JournalError::Error(ErrorKind::Decryption))
@@ -95,7 +99,7 @@ impl EntryEditor {
         Ok(entry_editor)
     }
 
-    fn editor_from_string(&self, editor: &str) -> Result<(String, Vec<String>), JournalError>{
+    fn editor_from_string(&self, editor: &str) -> Result<(String, Vec<String>), JournalError> {
         let parts = split(&editor).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
         let prog = &parts[0];
         let args = &parts[1..];
@@ -104,15 +108,17 @@ impl EntryEditor {
 
     fn get_editor_command(&self) -> Result<(String, Vec<String>), JournalError> {
         match self.editor {
-            Some(ref editor) => {
-                self.editor_from_string(&editor)
-            }
+            Some(ref editor) => self.editor_from_string(&editor),
             None => {
                 if let Some(visual_env) = env::var_os("VISUAL") {
-                    let pager = visual_env.into_string().map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+                    let pager = visual_env
+                        .into_string()
+                        .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
                     self.editor_from_string(&pager)
                 } else if let Some(editor_env) = env::var_os("EDITOR") {
-                    let pager = editor_env.into_string().map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+                    let pager = editor_env
+                        .into_string()
+                        .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
                     self.editor_from_string(&pager)
                 } else {
                     let args: Vec<String> = vec![];
@@ -131,18 +137,24 @@ impl EntryEditor {
         Ok(identities)
     }
 
-    fn encrypt<P: AsRef<Path>>(&self, encrypted_path: P, decrypted_path: P)  -> Result<(), JournalError> {
-        let file = File::open(decrypted_path).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+    fn encrypt<P: AsRef<Path>>(
+        &self,
+        encrypted_path: P,
+        decrypted_path: P,
+    ) -> Result<(), JournalError> {
+        let file =
+            File::open(decrypted_path).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
         let mut command = Command::new("ragenix");
-        command.args([
-            "--identity",
-            &self.identity,
-            "--rules",
-            "./rules.nix",
-            "--editor",
-            "-",
-            "--edit",
-        ])
+        command
+            .args([
+                "--identity",
+                &self.identity,
+                "--rules",
+                "./rules.nix",
+                "--editor",
+                "-",
+                "--edit",
+            ])
             .arg(encrypted_path.as_ref())
             .stdin(file)
             .current_dir(&self.journal_path);
@@ -175,7 +187,8 @@ impl EntryEditor {
         output_path.push(&self.filename);
         decrypt(output_path.clone(), input_path.clone(), &identities)?;
 
-        let pre_edit_hash = sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let pre_edit_hash =
+            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
         let (prog, args) = self.get_editor_command()?;
         let mut command = Command::new(&prog);
@@ -195,13 +208,11 @@ impl EntryEditor {
             return Err(JournalError::Error(ErrorKind::Subprocess));
         }
 
-        let post_edit_hash = sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let post_edit_hash =
+            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
         if pre_edit_hash == post_edit_hash {
-            println!(
-                "{} wasn't changed, skipping re-encryption.",
-                self.filename
-            );
+            println!("{} wasn't changed, skipping re-encryption.", self.filename);
             return Ok(());
         }
 
