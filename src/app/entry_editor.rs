@@ -171,7 +171,7 @@ impl EntryEditor {
         Ok(())
     }
 
-    fn spawn_editor(&self) -> Result<(), JournalError> {
+    fn spawn_editor(&self) -> Result<bool, JournalError> {
         let dir = tempfile::tempdir().map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
@@ -210,15 +210,15 @@ impl EntryEditor {
 
         if pre_edit_hash == post_edit_hash {
             println!("{} wasn't changed, skipping re-encryption.", self.filename);
-            return Ok(());
+            return Ok(false);
         }
 
         self.encrypt(output_path, input_path)?;
 
-        Ok(())
+        Ok(true)
     }
 
-    pub fn display(&self) -> Result<(), JournalError> {
+    pub fn edit(&self) -> Result<bool, JournalError> {
         tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
         eprintln!("Opening {} with {:?} ...", self.filename, self.editor);
 
@@ -228,6 +228,6 @@ impl EntryEditor {
         if let Some(e) = error {
             return Err(e);
         }
-        Ok(())
+        Ok(true)
     }
 }

@@ -96,7 +96,8 @@ impl<'a> App<'a> {
 
     fn edit_entry(&self, entry: &str) -> Result<(), JournalError> {
         let external_editor = EntryEditor::new(entry, &self.config)?;
-        external_editor.display()
+        let _ = external_editor.edit()?;
+        Ok(())
     }
 
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
