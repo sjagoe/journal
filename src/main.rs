@@ -43,11 +43,7 @@ fn main() -> Result<()> {
         Err(e) => panic!("failed to open: {}", e),
     };
 
-    let mut entries_path = PathBuf::new();
-    entries_path.push(&config.journal_path);
-    entries_path.push("entries.json");
-
-    let journal = Journal::from_file(&entries_path, &repo);
+    let journal = Journal::from_file(&config.entries_path(), &repo);
 
     let mut app: app::App = app::App::new(&config, &journal);
 
