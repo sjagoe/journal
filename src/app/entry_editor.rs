@@ -1,9 +1,8 @@
 use std::process::Command;
-use std::{env, path::PathBuf};
 
 use color_eyre::Result;
 
-use shell_words::split;
+// use shell_words::split;
 
 use crate::{
     config::Config,

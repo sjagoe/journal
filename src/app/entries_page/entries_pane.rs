@@ -1,8 +1,3 @@
-use std::{collections::HashMap, path::Path};
-
-use color_eyre::Result;
-
-use git2::{ObjectType, Repository, Sort, Status};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -12,11 +7,10 @@ use ratatui::{
     widgets::{Block, List, ListItem},
 };
 
-use time::UtcOffset;
 use time::macros::format_description;
-use time::{Timestamp, format_description::StaticFormatDescription};
+use time::format_description::StaticFormatDescription;
 
-use crate::{app::pagination::pagination, errors::JournalError};
+use crate::app::pagination::pagination;
 use crate::{
     journal::JournalSection,
     traits::{Drawable, Navigable},

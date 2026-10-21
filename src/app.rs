@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use entry_editor::EntryEditor;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
@@ -18,14 +16,11 @@ mod entry_editor;
 pub mod events;
 mod pagination;
 
+use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::errors::JournalError;
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
-use crate::{
-    app::events::{ActionInfo, Event},
-    errors::ErrorKind,
-};
 
 pub struct Redraw(pub bool);
 

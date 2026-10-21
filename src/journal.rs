@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
-use git2::{ObjectType, Oid, Repository, Revwalk, Sort};
+use git2::{ObjectType, Repository, Sort};
 use serde::Deserialize;
 
 use time::UtcOffset;

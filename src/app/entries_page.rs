@@ -1,25 +1,18 @@
-use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
-
-use color_eyre::Result;
-
-use git2::Repository;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    prelude::Modifier,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Padding},
+    widgets::{Block, Borders, Padding},
 };
-use serde::Deserialize;
 
 mod entries_pane;
 
-use crate::{app::entries_page::entries_pane::{ActivePane, EntriesPane}, journal::{Journal, JournalSection}};
-use crate::config::Config;
 use crate::traits::{Drawable, Navigable};
+use crate::{
+    app::entries_page::entries_pane::{ActivePane, EntriesPane},
+    journal::Journal,
+};
 
 pub struct EntriesPage<'a> {
     general_pane: EntriesPane<'a>,

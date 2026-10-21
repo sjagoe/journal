@@ -1,5 +1,3 @@
-use color_eyre::Result;
-
 use ratatui::{Frame, layout::Rect, text::Span, widgets::Block};
 
 pub trait Navigable {
