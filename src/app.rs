@@ -100,12 +100,7 @@ impl<'a> App<'a> {
     }
 
     fn edit_entry(&self, entry: &str) -> Result<(), JournalError> {
-        let filename = format!("{}.age", entry);
-        let mut file = PathBuf::new();
-        file.push(&self.config.journal_path);
-        file.push(filename);
-
-        let external_editor = EntryEditor::new(&file, &self.config);
+        let external_editor = EntryEditor::new(entry, &self.config)?;
         external_editor.display()
     }
 
