@@ -25,11 +25,7 @@ impl<'a> EntriesPage<'a> {
         let active_pane = ActivePane::General;
 
         EntriesPage {
-            general_pane: EntriesPane::new(
-                &journal.general,
-                ActivePane::General,
-                &active_pane,
-            ),
+            general_pane: EntriesPane::new(&journal.general, ActivePane::General, &active_pane),
             narrative_pane: EntriesPane::new(
                 &journal.narrative,
                 ActivePane::Narrative,
