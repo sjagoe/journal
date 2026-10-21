@@ -168,7 +168,7 @@ impl Navigable for EntriesPane<'_> {
     }
 
     fn select(&self) -> Option<String> {
-        Some("test".into())
+        Some(self.section[self.selected_index].name.to_string())
     }
 
     fn selected_item(&self) -> String {

@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+
+use entry_editor::EntryEditor;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -15,16 +18,19 @@ mod entry_editor;
 pub mod events;
 mod pagination;
 
-use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::errors::JournalError;
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
+use crate::{
+    app::events::{ActionInfo, Event},
+    errors::ErrorKind,
+};
 
 pub struct Redraw(pub bool);
 
 pub struct App<'a> {
-    _config: Config,
+    config: Config,
     journal: &'a Journal,
     entries_page: EntriesPage<'a>,
     height: u16,
@@ -33,7 +39,7 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     pub fn new(config: &Config, journal: &'a Journal) -> App<'a> {
         App {
-            _config: config.clone(),
+            config: config.clone(),
             journal,
             entries_page: EntriesPage::new(journal),
             height: 0,
@@ -93,15 +99,24 @@ impl<'a> App<'a> {
         f.render_widget(hint, area);
     }
 
-    fn select_item(&self) -> Result<(), JournalError> {
-        Ok(())
-    }
-
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
             Event::Select => {
-                self.select_item()?;
+                match page.select() {
+                    Some(selection) => {
+                        let filename = format!("{}.age", selection);
+                        let mut file = PathBuf::new();
+                        file.push(&self.config.journal_path);
+                        file.push(filename);
+
+                        let external_editor = EntryEditor::new(&file, "less");
+                        if let Some(e) = external_editor.display().err() {
+                            return Err(e);
+                        };
+                    }
+                    None => {}
+                }
                 return Ok(Redraw(true));
             }
             Event::Home => page.home(self.height),

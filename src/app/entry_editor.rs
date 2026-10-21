@@ -10,22 +10,20 @@ use crate::{
 
 pub struct EntryEditor {
     editor: String,
-    name: String,
+    path: PathBuf,
 }
 
 impl EntryEditor {
-    pub fn new(name: &str, editor: &str) -> Self {
+    pub fn new(path: &PathBuf, editor: &str) -> Self {
         EntryEditor {
-            editor: editor.to_string(),
-            name: name.to_string(),
+            editor: editor.to_owned(),
+            path: path.to_owned(),
         }
     }
 
     fn spawn_editor(&self) -> Result<(), JournalError> {
-        let mut file = PathBuf::new();
-
         let mut command = Command::new(&self.editor)
-            .arg(file.as_path())
+            .arg(&self.path)
             .spawn()
             .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
@@ -42,7 +40,11 @@ impl EntryEditor {
 
     pub fn display(&self) -> Result<(), JournalError> {
         tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
-        eprintln!("Opening {} with {} ...", self.name, self.editor);
+        eprintln!(
+            "Opening {} with {} ...",
+            self.path.to_string_lossy(),
+            self.editor
+        );
 
         let error = self.spawn_editor().err();
         tui::init().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
