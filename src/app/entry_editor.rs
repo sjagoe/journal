@@ -22,12 +22,21 @@ impl EntryEditor {
     }
 
     fn spawn_editor(&self) -> Result<(), JournalError> {
-        let mut command = Command::new(&self.editor)
-            .arg(&self.path)
-            .spawn()
+        let args = [
+            "-r",
+        ];
+        let mut command = Command::new(&self.editor);
+
+        for arg in args {
+            command.arg(arg);
+        }
+
+        command.arg(&self.path);
+
+        let mut process = command.spawn()
             .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
-        let status = command
+        let status = process
             .wait()
             .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
