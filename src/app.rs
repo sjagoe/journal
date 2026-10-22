@@ -31,7 +31,7 @@ pub struct Redraw(pub bool);
 enum AppMode {
     Standard,
     NewEntry,
-    Error,
+    Error(JournalError),
 }
 
 pub struct App {
@@ -187,7 +187,7 @@ impl App {
                     _ => {}
                 }
             }
-            AppMode::Error => {
+            AppMode::Error(_) => {
                 match event {
                     Event::Select | Event::Back => {
                         self.mode = AppMode::Standard;
@@ -200,5 +200,7 @@ impl App {
         Ok(Redraw(false))
     }
 
-    pub fn error(&mut self, _error: JournalError) {}
+    pub fn error(&mut self, error: JournalError) {
+        self.mode = AppMode::Error(error);
+    }
 }
