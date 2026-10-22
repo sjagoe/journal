@@ -5,9 +5,9 @@ use ratatui::{
     layout::Rect,
     prelude::Modifier,
     style::{Color, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, Paragraph,
+        Block, BorderType, Borders, Clear, Paragraph,
         block::{Padding, Title},
     },
 };
@@ -17,7 +17,6 @@ mod entry_editor;
 pub mod events;
 mod pagination;
 
-use crate::config::Config;
 use crate::errors::JournalError;
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
@@ -25,6 +24,7 @@ use crate::{
     app::events::{ActionInfo, Event},
     journal::EntryKind,
 };
+use crate::{config::Config, errors::ErrorKind, ui::centered_rect};
 
 pub struct Redraw(pub bool);
 
@@ -82,6 +82,27 @@ impl App {
         self.height = h;
     }
 
+    fn display_error(&self, frame: &mut Frame, error: &JournalError) {
+        let area = centered_rect(60, 25, frame.area());
+        let popup_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .title(Span::styled(
+                " Error ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ))
+            .style(Style::default().bg(Color::DarkGray));
+        let content = Paragraph::new(Text::styled(
+            error.as_str().to_string(),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .block(popup_block);
+        frame.render_widget(Clear, area);
+        frame.render_widget(content, area);
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
         let content_block = Block::default()
@@ -96,9 +117,9 @@ impl App {
 
         self.set_height(viewport.height);
 
-        // if let Some(error) = self.active_error {
-        //     self.display_error(f, &error);
-        // }
+        if let AppMode::Error(error) = self.mode {
+            self.display_error(frame, &error);
+        }
     }
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
