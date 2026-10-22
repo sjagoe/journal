@@ -127,8 +127,8 @@ impl App {
                 }
                 return Ok(Redraw(true));
             }
-            Event::Home => page.home(self.height),
-            Event::End => page.end(self.height),
+            Event::Home => page.home(),
+            Event::End => page.end(),
             Event::PageUp => page.pageup(self.height),
             Event::PageDown => page.pagedown(self.height),
             Event::NextSelection => page.next_selection(),

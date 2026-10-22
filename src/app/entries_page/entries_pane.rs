@@ -135,11 +135,11 @@ impl Drawable for EntriesPane {
 }
 
 impl Navigable for EntriesPane {
-    fn home(&mut self, _page_size: u16) {
+    fn home(&mut self) {
         self.selected_index = 0;
     }
 
-    fn end(&mut self, _page_size: u16) {
+    fn end(&mut self) {
         self.selected_index = if self.len() > 0 { self.len() - 1 } else { 0 };
     }
 

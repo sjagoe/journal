@@ -3,8 +3,8 @@ use ratatui::{Frame, layout::Rect, text::Span, widgets::Block};
 use crate::journal::Journal;
 
 pub trait Navigable {
-    fn home(&mut self, page_size: u16);
-    fn end(&mut self, page_size: u16);
+    fn home(&mut self);
+    fn end(&mut self);
     fn pagedown(&mut self, page_size: u16);
     fn pageup(&mut self, page_size: u16);
     fn next_selection(&mut self);

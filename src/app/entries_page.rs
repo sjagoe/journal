@@ -69,20 +69,20 @@ impl Drawable for EntriesPage {
 }
 
 impl Navigable for EntriesPage {
-    fn home(&mut self, page_size: u16) {
+    fn home(&mut self) {
         let pane = match self.active_pane {
             ActivePane::General => &mut self.general_pane,
             ActivePane::Narrative => &mut self.narrative_pane,
         };
-        pane.home(page_size);
+        pane.home();
     }
 
-    fn end(&mut self, page_size: u16) {
+    fn end(&mut self) {
         let pane = match self.active_pane {
             ActivePane::General => &mut self.general_pane,
             ActivePane::Narrative => &mut self.narrative_pane,
         };
-        pane.end(page_size);
+        pane.end();
     }
 
     fn pagedown(&mut self, page_size: u16) {
