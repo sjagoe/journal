@@ -7,13 +7,13 @@ use ratatui::{
     widgets::{Block, List, ListItem},
 };
 
-use time::macros::format_description;
 use time::format_description::StaticFormatDescription;
+use time::macros::format_description;
 
-use crate::app::pagination::pagination;
+use crate::traits::{Drawable, Navigable};
 use crate::{
-    journal::JournalSection,
-    traits::{Drawable, Navigable},
+    app::pagination::pagination,
+    journal::{EntryKind, Journal},
 };
 
 #[allow(unused)]
@@ -21,35 +21,41 @@ static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
 );
 
-#[derive(PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ActivePane {
     General,
     Narrative,
 }
 
-pub struct EntriesPane<'a> {
-    section: &'a JournalSection,
+impl Into<EntryKind> for &ActivePane {
+    fn into(self) -> EntryKind {
+        match self {
+            ActivePane::General => EntryKind::General,
+            ActivePane::Narrative => EntryKind::Narrative,
+        }
+    }
+}
+
+pub struct EntriesPane {
+    count: usize,
     selected_index: usize,
     active: bool,
     pane_kind: ActivePane,
 }
 
-impl<'a> EntriesPane<'a> {
-    pub fn new(
-        section: &'a JournalSection,
-        pane_kind: ActivePane,
-        active_pane: &ActivePane,
-    ) -> EntriesPane<'a> {
+impl EntriesPane {
+    pub fn new(journal: &Journal, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane {
+        let section = journal.section(&(&pane_kind).into());
         EntriesPane {
-            section,
+            count: section.len(),
             selected_index: 0,
             active: active_pane == &pane_kind,
             pane_kind,
         }
     }
 
-    fn len(&self) -> usize {
-        self.section.len()
+    pub fn len(&self) -> usize {
+        self.count
     }
 
     pub fn activate(&mut self, active_pane: &ActivePane) {
@@ -57,8 +63,10 @@ impl<'a> EntriesPane<'a> {
     }
 }
 
-impl Drawable for EntriesPane<'_> {
-    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
+impl Drawable for EntriesPane {
+    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block, journal: &Journal) -> Rect {
+        let section = journal.section(&(&self.pane_kind).into());
+
         let viewport = content_block.inner(area);
 
         let mut list_items = Vec::<ListItem>::new();
@@ -72,7 +80,7 @@ impl Drawable for EntriesPane<'_> {
         } else {
             page_start_index + usize::from(visible)
         };
-        let display_items = &self.section.entries[page_start_index..end_slice];
+        let display_items = &section.entries[page_start_index..end_slice];
 
         for (pos, item) in display_items.iter().enumerate() {
             let style = if pos + page_start_index == self.selected_index {
@@ -126,7 +134,7 @@ impl Drawable for EntriesPane<'_> {
     }
 }
 
-impl Navigable for EntriesPane<'_> {
+impl Navigable for EntriesPane {
     fn home(&mut self, _page_size: u16) {
         self.selected_index = 0;
     }
@@ -163,7 +171,9 @@ impl Navigable for EntriesPane<'_> {
     }
 
     fn select(&self) -> Option<String> {
-        Some(self.section[self.selected_index].name.to_string())
+        // let section = journal.section(&(&self.pane_kind).into());
+        None
+        // Some(self.section[self.selected_index].name.to_string())
     }
 
     // fn selected_item(&self) -> String {

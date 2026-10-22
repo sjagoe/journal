@@ -26,8 +26,8 @@ pub struct Redraw(pub bool);
 
 pub struct App<'a> {
     config: Config,
-    _journal: &'a Journal,
-    entries_page: EntriesPage<'a>,
+    journal: &'a Journal,
+    entries_page: EntriesPage,
     height: u16,
 }
 
@@ -35,7 +35,7 @@ impl<'a> App<'a> {
     pub fn new(config: &Config, journal: &'a Journal) -> App<'a> {
         App {
             config: config.clone(),
-            _journal: journal,
+            journal,
             entries_page: EntriesPage::new(journal),
             height: 0,
         }
@@ -69,7 +69,7 @@ impl<'a> App<'a> {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, area, content_block);
+        let viewport = page.draw(frame, area, content_block, &self.journal);
 
         self.set_height(viewport.height);
 

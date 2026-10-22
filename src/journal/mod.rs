@@ -8,6 +8,12 @@ mod changes;
 
 use self::changes::LastChanged;
 
+#[derive(Clone, Debug)]
+pub enum EntryKind {
+    General,
+    Narrative,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct SerializedEntries {
     documents: Vec<String>,
@@ -34,12 +40,13 @@ impl JournalEntry {
 
 #[derive(Clone, Debug)]
 pub struct JournalSection {
+    pub kind: EntryKind,
     pub entries: Vec<JournalEntry>,
 }
 
 impl JournalSection {
-    fn new(entries: Vec<JournalEntry>) -> JournalSection {
-        JournalSection { entries }
+    fn new(kind: EntryKind, entries: Vec<JournalEntry>) -> JournalSection {
+        JournalSection { kind, entries }
     }
 
     pub fn len(&self) -> usize {
@@ -120,13 +127,26 @@ impl Journal {
 
         let changes = LastChanged::new(repo);
 
-        let general = JournalSection::new(to_entries(repo, &changes, &entries.general));
-        let narrative = JournalSection::new(to_entries(repo, &changes, &entries.narrative));
+        let general = JournalSection::new(
+            EntryKind::General,
+            to_entries(repo, &changes, &entries.general),
+        );
+        let narrative = JournalSection::new(
+            EntryKind::Narrative,
+            to_entries(repo, &changes, &entries.narrative),
+        );
 
         Journal {
             _documents: entries.documents,
             general,
             narrative,
+        }
+    }
+
+    pub fn section(&self, kind: &EntryKind) -> &JournalSection {
+        match kind {
+            EntryKind::General => &self.general,
+            EntryKind::Narrative => &self.narrative,
         }
     }
 }

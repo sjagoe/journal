@@ -14,30 +14,26 @@ use crate::{
     journal::Journal,
 };
 
-pub struct EntriesPage<'a> {
-    general_pane: EntriesPane<'a>,
-    narrative_pane: EntriesPane<'a>,
+pub struct EntriesPage {
+    general_pane: EntriesPane,
+    narrative_pane: EntriesPane,
     active_pane: ActivePane,
 }
 
-impl<'a> EntriesPage<'a> {
-    pub fn new(journal: &'a Journal) -> EntriesPage<'a> {
+impl EntriesPage {
+    pub fn new(journal: &Journal) -> EntriesPage {
         let active_pane = ActivePane::General;
 
         EntriesPage {
-            general_pane: EntriesPane::new(&journal.general, ActivePane::General, &active_pane),
-            narrative_pane: EntriesPane::new(
-                &journal.narrative,
-                ActivePane::Narrative,
-                &active_pane,
-            ),
+            general_pane: EntriesPane::new(journal, ActivePane::General, &active_pane),
+            narrative_pane: EntriesPane::new(journal, ActivePane::Narrative, &active_pane),
             active_pane,
         }
     }
 }
 
-impl Drawable for EntriesPage<'_> {
-    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block) -> Rect {
+impl Drawable for EntriesPage {
+    fn draw(&self, frame: &mut Frame, area: Rect, content_block: Block, journal: &Journal) -> Rect {
         let viewport = content_block.inner(area);
 
         let layout = Layout::default()
@@ -52,7 +48,7 @@ impl Drawable for EntriesPage<'_> {
             .borders(Borders::ALL)
             .style(Style::default())
             .title(Line::from(general_pane.title()));
-        general_pane.draw(frame, general_area, general_block);
+        general_pane.draw(frame, general_area, general_block, journal);
 
         let narrative_pane = Box::<&dyn Drawable>::new(&self.narrative_pane);
         let narrative_block = Block::default()
@@ -60,7 +56,7 @@ impl Drawable for EntriesPage<'_> {
             .borders(Borders::ALL)
             .style(Style::default())
             .title(Line::from(narrative_pane.title()));
-        narrative_pane.draw(frame, narrative_area, narrative_block);
+        narrative_pane.draw(frame, narrative_area, narrative_block, journal);
 
         frame.render_widget(content_block, area);
 
@@ -72,7 +68,7 @@ impl Drawable for EntriesPage<'_> {
     }
 }
 
-impl Navigable for EntriesPage<'_> {
+impl Navigable for EntriesPage {
     fn home(&mut self, page_size: u16) {
         let pane = match self.active_pane {
             ActivePane::General => &mut self.general_pane,
