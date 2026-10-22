@@ -27,9 +27,9 @@ pub enum ActivePane {
     Narrative,
 }
 
-impl Into<EntryKind> for &ActivePane {
-    fn into(self) -> EntryKind {
-        match self {
+impl From<&ActivePane> for EntryKind {
+    fn from(val: &ActivePane) -> Self {
+        match val {
             ActivePane::General => EntryKind::General,
             ActivePane::Narrative => EntryKind::Narrative,
         }

@@ -1,4 +1,4 @@
-use std::{fs::File, path::PathBuf};
+use std::fs::File;
 use std::io::BufReader;
 
 use color_eyre::Result;

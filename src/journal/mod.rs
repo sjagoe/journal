@@ -40,13 +40,13 @@ impl JournalEntry {
 
 #[derive(Clone, Debug)]
 pub struct JournalSection {
-    pub kind: EntryKind,
+    pub _kind: EntryKind,
     pub entries: Vec<JournalEntry>,
 }
 
 impl JournalSection {
     fn new(kind: EntryKind, entries: Vec<JournalEntry>) -> JournalSection {
-        JournalSection { kind, entries }
+        JournalSection { _kind: kind, entries }
     }
 
     pub fn len(&self) -> usize {

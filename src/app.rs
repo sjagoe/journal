@@ -69,7 +69,7 @@ impl<'a> App<'a> {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, area, content_block, &self.journal);
+        let viewport = page.draw(frame, area, content_block, self.journal);
 
         self.set_height(viewport.height);
 
