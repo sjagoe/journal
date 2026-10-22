@@ -24,7 +24,7 @@ use crate::{
     app::events::{ActionInfo, Event},
     journal::EntryKind,
 };
-use crate::{config::Config, errors::ErrorKind, ui::centered_rect};
+use crate::{config::Config, ui::centered_rect};
 
 pub struct Redraw(pub bool);
 
@@ -164,9 +164,9 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.journal = self.journal.with_new_entry(&kind, &new_entry, &repo);
+        self.journal = self.journal.with_new_entry(&kind, new_entry, &repo);
 
-        self.edit_entry(&new_entry)
+        self.edit_entry(new_entry)
     }
 
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
