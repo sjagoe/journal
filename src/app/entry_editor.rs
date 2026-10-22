@@ -2,10 +2,10 @@ use std::{
     env,
     ffi::OsStr,
     fs::{self, File},
-    io::{self, BufReader},
+    io::{self, BufReader, Write},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 use age::{
@@ -21,12 +21,18 @@ use color_eyre::Result;
 use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
+use time::macros::format_description;
+use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 use crate::{
     config::Config,
     errors::{ErrorKind, JournalError},
     tui,
 };
+
+static ORG_DATE_FORMAT: StaticFormatDescription = format_description!(
+    "[year]-[month]-[day] [weekday repr:short]"
+);
 
 pub(crate) fn sha256<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     let mut file = File::open(path)?;
@@ -139,10 +145,18 @@ impl EntryEditor {
     fn encrypt<P: AsRef<Path>>(
         &self,
         encrypted_path: P,
-        decrypted_path: P,
+        decrypted_path: Option<P>,
+        text: Option<&str>,
     ) -> Result<(), JournalError> {
-        let file =
-            File::open(decrypted_path).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+        let file = if let Some(path) = decrypted_path {
+            let stdin_file =
+                File::open(path).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+            Some(stdin_file)
+        } else if text.is_some() {
+            None
+        } else {
+            return Err(JournalError::Error(ErrorKind::Subprocess));
+        };
         let mut command = Command::new("ragenix");
         command
             .args([
@@ -154,11 +168,30 @@ impl EntryEditor {
                 "-",
                 "--edit",
             ])
-            .arg(encrypted_path.as_ref())
-            .stdin(file)
-            .current_dir(&self.journal_path);
+            .current_dir(&self.journal_path)
+            .arg(encrypted_path.as_ref());
+
+        if let Some(stdin_file) = file {
+            command.stdin(stdin_file);
+        } else if text.is_some() {
+            command.stdin(Stdio::piped());
+        } else {
+            return Err(JournalError::Error(ErrorKind::Subprocess));
+        }
 
         if let Ok(mut child) = command.spawn() {
+            if let Some(stdin_text) = text {
+                let subproc_stdin = stdin_text.to_owned();
+                let mut stdin = child
+                    .stdin
+                    .take()
+                    .expect("child stdin should be retrievable");
+                std::thread::spawn(move || {
+                    let _ = stdin
+                        .write_all(subproc_stdin.as_bytes())
+                        .map_err(|_| JournalError::Error(ErrorKind::Subprocess));
+                });
+            }
             if let Ok(status) = child.wait() {
                 if !status.success() {
                     println!("ragenix exited with code {:?}", status.code());
@@ -217,9 +250,26 @@ impl EntryEditor {
             return Ok(false);
         }
 
-        self.encrypt(encrypted_file_path, &input_path)?;
+        self.encrypt(encrypted_file_path, Some(&input_path), None)?;
 
         Ok(true)
+    }
+
+    fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
+        let now = OffsetDateTime::now_local()
+            .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+
+        let now_org_str = now.format(ORG_DATE_FORMAT)
+            .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+
+        let text = format!("#+SETUPFILE: style.css.org
+
+* [{}]
+", now_org_str);
+
+        self.encrypt(encrypted_file_path, None, Some(&text))?;
+
+        Ok(())
     }
 
     fn create_or_edit_entry(&self, filename: &str) -> Result<bool, JournalError> {
@@ -234,6 +284,10 @@ impl EntryEditor {
         let mut encrypted_file_path = PathBuf::new();
         encrypted_file_path.push(&self.journal_path);
         encrypted_file_path.push(filename);
+
+        if !encrypted_file_path.exists() {
+            self.create_new_entry(&encrypted_file_path)?;
+        }
 
         let changed = self.decrypt_and_edit_entry(&encrypted_file_path)?;
         if !changed {
