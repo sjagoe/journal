@@ -103,8 +103,8 @@ impl App {
     }
 
     fn edit_entry(&mut self, entry: &str) -> Result<(), JournalError> {
-        let external_editor = EntryEditor::new(entry, &self.config)?;
-        let file_changed = external_editor.edit()?;
+        let external_editor = EntryEditor::new(&self.config)?;
+        let file_changed = external_editor.edit(entry)?;
         if !file_changed {
             return Ok(());
         }
