@@ -285,15 +285,18 @@ impl EntryEditor {
         encrypted_file_path.push(&self.journal_path);
         encrypted_file_path.push(filename);
 
-        if !encrypted_file_path.exists() {
+        let new_file = if !encrypted_file_path.exists() {
             self.create_new_entry(&encrypted_file_path)?;
-        }
+            true
+        } else {
+            false
+        };
 
-        let changed = self.decrypt_and_edit_entry(&encrypted_file_path)?;
-        if !changed {
+        let edited = self.decrypt_and_edit_entry(&encrypted_file_path)?;
+        if !edited {
             println!("{} wasn't changed, skipping re-encryption.", filename);
         }
-        Ok(changed)
+        Ok(new_file || edited)
     }
 
     pub fn edit(&self, entry: &str) -> Result<bool, JournalError> {
