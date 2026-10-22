@@ -29,11 +29,12 @@ pub struct App {
     config: Config,
     journal: Journal,
     entries_page: EntriesPage,
+    entry_editor: EntryEditor,
     height: u16,
 }
 
 impl App {
-    pub fn new(config: &Config) -> App {
+    pub fn new(config: &Config) -> Result<App, JournalError> {
         let repo = match Repository::open(&config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
@@ -41,12 +42,15 @@ impl App {
 
         let journal = Journal::from_file(&config.entries_path(), &repo);
         let entries_page = EntriesPage::new(&journal);
-        App {
+        let entry_editor = EntryEditor::new(config)?;
+        let app = App {
             config: config.clone(),
             journal,
             entries_page,
+            entry_editor,
             height: 0,
-        }
+        };
+        Ok(app)
     }
 
     pub fn title(&self) -> Vec<Span<'_>> {
@@ -103,8 +107,7 @@ impl App {
     }
 
     fn edit_entry(&mut self, entry: &str) -> Result<(), JournalError> {
-        let external_editor = EntryEditor::new(&self.config)?;
-        let file_changed = external_editor.edit(entry)?;
+        let file_changed = self.entry_editor.edit(entry)?;
         if !file_changed {
             return Ok(());
         }

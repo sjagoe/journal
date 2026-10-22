@@ -221,7 +221,7 @@ impl EntryEditor {
         tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
 
         let display_editor = if self.editor_args.is_empty() {
-            format!("{}", self.editor)
+            self.editor.to_string()
         } else {
             format!("{} {}", self.editor, join(&self.editor_args))
         };

@@ -36,7 +36,7 @@ fn main() -> Result<()> {
 
     println!("{}", config);
 
-    let mut app: app::App = app::App::new(&config);
+    let mut app: app::App = app::App::new(&config)?;
 
     let mut terminal = tui::init()?;
     run_app(&mut terminal, &mut app)?;
