@@ -1,8 +1,8 @@
 use std::path::Path;
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{fs::{File, OpenOptions}, io::BufReader, path::PathBuf};
 
 use git2::Repository;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 mod changes;
 
@@ -14,7 +14,7 @@ pub enum EntryKind {
     Narrative,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SerializedEntries {
     documents: Vec<String>,
     general: Vec<String>,
@@ -68,6 +68,7 @@ impl std::ops::Index<usize> for JournalSection {
 
 #[derive(Clone, Debug)]
 pub struct Journal {
+    location: PathBuf,
     _documents: Vec<String>,
     pub general: JournalSection,
     pub narrative: JournalSection,
@@ -137,6 +138,7 @@ impl Journal {
         );
 
         Journal {
+            location: path.to_owned(),
             _documents: entries.documents,
             general,
             narrative,
@@ -148,5 +150,36 @@ impl Journal {
             EntryKind::General => &self.general,
             EntryKind::Narrative => &self.narrative,
         }
+    }
+
+    pub fn with_new_entry(&self, kind: &EntryKind, name: &str, repo: &Repository) -> Journal {
+        let mut general: Vec<String> = self.general.entries.iter().map(|i| i.name.to_owned()).collect();
+        let mut narrative: Vec<String> = self.narrative.entries.iter().map(|i| i.name.to_owned()).collect();
+
+        let entries_kind = match kind {
+            EntryKind::General => &mut general,
+            EntryKind::Narrative => &mut narrative,
+        };
+        entries_kind.push(name.to_owned());
+        entries_kind.sort();
+
+        let entries = SerializedEntries {
+            documents: self._documents.to_owned(),
+            general,
+            narrative,
+        };
+
+        let tmp_location = self.location.with_added_extension("tmp");
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&tmp_location).expect("Unable to open entries data");
+
+        // fixme unwrap!
+        serde_json::to_writer_pretty(file, &entries).unwrap();
+
+        std::fs::rename(&tmp_location, &self.location).unwrap();
+
+        Journal::from_file(&self.location, repo)
     }
 }

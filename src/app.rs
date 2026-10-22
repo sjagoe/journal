@@ -17,11 +17,14 @@ mod entry_editor;
 pub mod events;
 mod pagination;
 
-use crate::app::events::{ActionInfo, Event};
 use crate::config::Config;
 use crate::errors::JournalError;
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
+use crate::{
+    app::events::{ActionInfo, Event},
+    journal::EntryKind,
+};
 
 pub struct Redraw(pub bool);
 
@@ -91,7 +94,7 @@ impl App {
     }
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-        let actions = [Event::Exit];
+        let actions = [Event::Exit, Event::Select, Event::New];
 
         let keys_hint = actions
             .iter()
@@ -123,6 +126,20 @@ impl App {
         Ok(())
     }
 
+    fn new_entry(&mut self) -> Result<(), JournalError> {
+        let new_entry = "new-entry";
+        let kind = EntryKind::from(&self.entries_page.active_pane);
+
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        self.journal = self.journal.with_new_entry(&kind, &new_entry, &repo);
+
+        self.edit_entry(&new_entry)
+    }
+
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
@@ -130,6 +147,10 @@ impl App {
                 if let Some(entry) = page.select(&self.journal) {
                     self.edit_entry(&entry)?
                 }
+                return Ok(Redraw(true));
+            }
+            Event::New => {
+                self.new_entry()?;
                 return Ok(Redraw(true));
             }
             Event::Home => page.home(),

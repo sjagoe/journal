@@ -17,7 +17,7 @@ use crate::{
 pub struct EntriesPage {
     general_pane: EntriesPane,
     narrative_pane: EntriesPane,
-    active_pane: ActivePane,
+    pub active_pane: ActivePane,
 }
 
 impl EntriesPage {

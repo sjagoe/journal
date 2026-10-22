@@ -5,6 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 #[derive(Debug)]
 pub enum Event {
     Select,
+    New,
     // Back,
     Home,
     End,
@@ -37,6 +38,7 @@ impl From<KeyEvent> for Event {
             (keycode, modifiers) => {
                 if modifiers == KeyModifiers::ALT.bits() {
                     match keycode {
+                        KeyCode::Char('n') => Event::New,
                         KeyCode::Char('v') => Event::PageUp,
                         _ => Event::Invalid,
                     }
@@ -65,6 +67,7 @@ impl From<&Event> for ActionInfo {
     fn from(action: &Event) -> ActionInfo {
         let (key, name) = match action {
             Event::Select => ("Enter", "Select"),
+            Event::New => ("M-n", "Create new entry"),
             Event::Exit => ("C-x", "Exit"),
             Event::Home => ("Home", "Go to the top"),
             Event::End => ("End", "Go to the bottom"),
