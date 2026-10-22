@@ -1,5 +1,9 @@
 use std::path::Path;
-use std::{fs::{File, OpenOptions}, io::BufReader, path::PathBuf};
+use std::{
+    fs::{File, OpenOptions},
+    io::BufReader,
+    path::PathBuf,
+};
 
 use git2::Repository;
 use serde::{Deserialize, Serialize};
@@ -46,7 +50,10 @@ pub struct JournalSection {
 
 impl JournalSection {
     fn new(kind: EntryKind, entries: Vec<JournalEntry>) -> JournalSection {
-        JournalSection { _kind: kind, entries }
+        JournalSection {
+            _kind: kind,
+            entries,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -153,8 +160,18 @@ impl Journal {
     }
 
     pub fn with_new_entry(&self, kind: &EntryKind, name: &str, repo: &Repository) -> Journal {
-        let mut general: Vec<String> = self.general.entries.iter().map(|i| i.name.to_owned()).collect();
-        let mut narrative: Vec<String> = self.narrative.entries.iter().map(|i| i.name.to_owned()).collect();
+        let mut general: Vec<String> = self
+            .general
+            .entries
+            .iter()
+            .map(|i| i.name.to_owned())
+            .collect();
+        let mut narrative: Vec<String> = self
+            .narrative
+            .entries
+            .iter()
+            .map(|i| i.name.to_owned())
+            .collect();
 
         let entries_kind = match kind {
             EntryKind::General => &mut general,
@@ -173,7 +190,8 @@ impl Journal {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&tmp_location).expect("Unable to open entries data");
+            .open(&tmp_location)
+            .expect("Unable to open entries data");
 
         // fixme unwrap!
         serde_json::to_writer_pretty(file, &entries).unwrap();

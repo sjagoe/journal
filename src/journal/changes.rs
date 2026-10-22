@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use git2::{ObjectType, Repository, Sort};
 
-use time::UtcOffset;
 use time::macros::format_description;
-use time::{Timestamp, format_description::StaticFormatDescription};
+use time::UtcOffset;
+use time::{format_description::StaticFormatDescription, Timestamp};
 
 use crate::errors::{ErrorKind, JournalError};
 

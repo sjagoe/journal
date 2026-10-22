@@ -11,8 +11,8 @@ use std::{
 use age::{
     armor::ArmoredReader,
     cli_common::{
-        StdinGuard,
         file_io::{InputReader, OutputFormat, OutputWriter},
+        StdinGuard,
     },
     decryptor::RecipientsDecryptor,
 };
@@ -22,7 +22,7 @@ use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
 use time::macros::format_description;
-use time::{OffsetDateTime, format_description::StaticFormatDescription};
+use time::{format_description::StaticFormatDescription, OffsetDateTime};
 
 use crate::{
     config::Config,
@@ -30,9 +30,8 @@ use crate::{
     tui,
 };
 
-static ORG_DATE_FORMAT: StaticFormatDescription = format_description!(
-    "[year]-[month]-[day] [weekday repr:short]"
-);
+static ORG_DATE_FORMAT: StaticFormatDescription =
+    format_description!("[year]-[month]-[day] [weekday repr:short]");
 
 pub(crate) fn sha256<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     let mut file = File::open(path)?;
@@ -256,16 +255,20 @@ impl EntryEditor {
     }
 
     fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
-        let now = OffsetDateTime::now_local()
+        let now =
+            OffsetDateTime::now_local().map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+
+        let now_org_str = now
+            .format(ORG_DATE_FORMAT)
             .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
-        let now_org_str = now.format(ORG_DATE_FORMAT)
-            .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
-
-        let text = format!("#+SETUPFILE: style.css.org
+        let text = format!(
+            "#+SETUPFILE: style.css.org
 
 * [{}]
-", now_org_str);
+",
+            now_org_str
+        );
 
         self.encrypt(encrypted_file_path, None, Some(&text))?;
 

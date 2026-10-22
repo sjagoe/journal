@@ -1,15 +1,15 @@
 use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
-    Frame,
     layout::Rect,
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Paragraph,
         block::{Padding, Title},
+        Block, BorderType, Borders, Paragraph,
     },
+    Frame,
 };
 
 mod entries_page;

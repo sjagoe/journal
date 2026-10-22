@@ -1,9 +1,9 @@
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Padding},
+    Frame,
 };
 
 mod entries_pane;
