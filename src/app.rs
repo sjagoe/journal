@@ -1,15 +1,15 @@
 use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
+    Frame,
     layout::Rect,
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{
-        block::{Padding, Title},
         Block, BorderType, Borders, Paragraph,
+        block::{Padding, Title},
     },
-    Frame,
 };
 
 mod entries_page;
@@ -28,12 +28,19 @@ use crate::{
 
 pub struct Redraw(pub bool);
 
+enum AppMode {
+    Standard,
+    NewEntry,
+    Error,
+}
+
 pub struct App {
     config: Config,
     journal: Journal,
     entries_page: EntriesPage,
     entry_editor: EntryEditor,
     height: u16,
+    mode: AppMode,
 }
 
 impl App {
@@ -52,6 +59,7 @@ impl App {
             entries_page,
             entry_editor,
             height: 0,
+            mode: AppMode::Standard,
         };
         Ok(app)
     }
@@ -142,26 +150,53 @@ impl App {
 
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
-        match event {
-            Event::Select => {
-                if let Some(entry) = page.select(&self.journal) {
-                    self.edit_entry(&entry)?
+        match self.mode {
+            AppMode::Standard => {
+                match event {
+                    Event::Select => {
+                        if let Some(entry) = page.select(&self.journal) {
+                            self.edit_entry(&entry)?
+                        }
+                        return Ok(Redraw(true));
+                    },
+                    Event::New => {
+                        self.mode = AppMode::NewEntry;
+                        return Ok(Redraw(true));
+                    }
+                    Event::Home => page.home(),
+                    Event::End => page.end(),
+                    Event::PageUp => page.pageup(self.height),
+                    Event::PageDown => page.pagedown(self.height),
+                    Event::NextSelection => page.next_selection(),
+                    Event::PreviousSelection => page.previous_selection(),
+                    Event::SwitchPane => page.switch_pane(),
+                    _ => {}
+                };
+            }
+            AppMode::NewEntry => {
+                match event {
+                    Event::Select => {
+                        self.mode = AppMode::Standard;
+                        self.new_entry()?;
+                        return Ok(Redraw(true));
+                    }
+                    Event::Back => {
+                        self.mode = AppMode::Standard;
+                        return Ok(Redraw(true));
+                    }
+                    _ => {}
                 }
-                return Ok(Redraw(true));
             }
-            Event::New => {
-                self.new_entry()?;
-                return Ok(Redraw(true));
+            AppMode::Error => {
+                match event {
+                    Event::Select | Event::Back => {
+                        self.mode = AppMode::Standard;
+                        return Ok(Redraw(true));
+                    }
+                    _ => {}
+                }
             }
-            Event::Home => page.home(),
-            Event::End => page.end(),
-            Event::PageUp => page.pageup(self.height),
-            Event::PageDown => page.pagedown(self.height),
-            Event::NextSelection => page.next_selection(),
-            Event::PreviousSelection => page.previous_selection(),
-            Event::SwitchPane => page.switch_pane(),
-            _ => {}
-        };
+        }
         Ok(Redraw(false))
     }
 
