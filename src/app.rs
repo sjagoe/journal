@@ -1,4 +1,5 @@
 use entry_editor::EntryEditor;
+use git2::Repository;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -24,19 +25,26 @@ use crate::{app::entries_page::EntriesPage, journal::Journal};
 
 pub struct Redraw(pub bool);
 
-pub struct App<'a> {
+pub struct App {
     config: Config,
-    journal: &'a Journal,
+    journal: Journal,
     entries_page: EntriesPage,
     height: u16,
 }
 
-impl<'a> App<'a> {
-    pub fn new(config: &Config, journal: &'a Journal) -> App<'a> {
+impl App {
+    pub fn new(config: &Config) -> App {
+        let repo = match Repository::open(&config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        let journal = Journal::from_file(&config.entries_path(), &repo);
+        let entries_page = EntriesPage::new(&journal);
         App {
             config: config.clone(),
             journal,
-            entries_page: EntriesPage::new(journal),
+            entries_page,
             height: 0,
         }
     }
@@ -69,7 +77,7 @@ impl<'a> App<'a> {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, area, content_block, self.journal);
+        let viewport = page.draw(frame, area, content_block, &self.journal);
 
         self.set_height(viewport.height);
 
@@ -96,7 +104,17 @@ impl<'a> App<'a> {
 
     fn edit_entry(&self, entry: &str) -> Result<(), JournalError> {
         let external_editor = EntryEditor::new(entry, &self.config)?;
-        let _ = external_editor.edit()?;
+        let file_changed = external_editor.edit()?;
+        if !file_changed {
+            return Ok(());
+        }
+
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+        self.journal.reload(&repo)?;
+
         Ok(())
     }
 
@@ -104,7 +122,7 @@ impl<'a> App<'a> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
             Event::Select => {
-                if let Some(entry) = page.select(self.journal) {
+                if let Some(entry) = page.select(&self.journal) {
                     self.edit_entry(&entry)?
                 }
                 return Ok(Redraw(true));
