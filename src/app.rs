@@ -102,7 +102,7 @@ impl App {
         f.render_widget(hint, area);
     }
 
-    fn edit_entry(&self, entry: &str) -> Result<(), JournalError> {
+    fn edit_entry(&mut self, entry: &str) -> Result<(), JournalError> {
         let external_editor = EntryEditor::new(entry, &self.config)?;
         let file_changed = external_editor.edit()?;
         if !file_changed {
@@ -113,7 +113,9 @@ impl App {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
-        self.journal.reload(&repo)?;
+        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+
+        self.entries_page.update(&self.journal);
 
         Ok(())
     }

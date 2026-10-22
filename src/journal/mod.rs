@@ -6,8 +6,6 @@ use serde::Deserialize;
 
 mod changes;
 
-use crate::errors::JournalError;
-
 use self::changes::LastChanged;
 
 #[derive(Clone, Debug)]
@@ -150,9 +148,5 @@ impl Journal {
             EntryKind::General => &self.general,
             EntryKind::Narrative => &self.narrative,
         }
-    }
-
-    pub fn reload(&self, _repo: &Repository) -> Result<(), JournalError> {
-        Ok(())
     }
 }

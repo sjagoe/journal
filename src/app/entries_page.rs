@@ -30,6 +30,11 @@ impl EntriesPage {
             active_pane,
         }
     }
+
+    pub fn update(&mut self, journal: &Journal) {
+        self.general_pane.update(journal);
+        self.narrative_pane.update(journal);
+    }
 }
 
 impl Drawable for EntriesPage {

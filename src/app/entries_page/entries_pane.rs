@@ -61,6 +61,14 @@ impl EntriesPane {
     pub fn activate(&mut self, active_pane: &ActivePane) {
         self.active = active_pane == &self.pane_kind;
     }
+
+    pub fn update(&mut self, journal: &Journal) {
+        let section = journal.section(&(&self.pane_kind).into());
+        self.count = section.len();
+        if self.selected_index > self.count - 1 {
+            self.end();
+        }
+    }
 }
 
 impl Drawable for EntriesPane {
