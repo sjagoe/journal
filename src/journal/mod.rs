@@ -1,19 +1,12 @@
 use std::path::Path;
-use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
-use git2::{ObjectType, Repository, Sort};
+use git2::Repository;
 use serde::Deserialize;
-
-use time::UtcOffset;
-use time::macros::format_description;
-use time::{Timestamp, format_description::StaticFormatDescription};
-
-use crate::errors::{ErrorKind, JournalError};
 
 mod changes;
 
 use self::changes::LastChanged;
-
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SerializedEntries {
@@ -21,7 +14,6 @@ pub struct SerializedEntries {
     general: Vec<String>,
     narrative: Vec<String>,
 }
-
 
 #[derive(Clone, Debug)]
 pub struct JournalEntry {
