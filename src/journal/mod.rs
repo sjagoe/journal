@@ -190,6 +190,7 @@ impl Journal {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&tmp_location)
             .expect("Unable to open entries data");
 
