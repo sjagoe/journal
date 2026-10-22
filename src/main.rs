@@ -5,7 +5,7 @@ use color_eyre::Result;
 use dirs::config_dir;
 
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
-use ratatui::{backend::Backend, Terminal};
+use ratatui::{Terminal, backend::Backend};
 
 mod app;
 mod config;
@@ -16,7 +16,7 @@ mod tui;
 mod ui;
 
 use crate::{
-    app::{events::Event, App},
+    app::{App, events::Event},
     config::Config,
     ui::ui,
 };

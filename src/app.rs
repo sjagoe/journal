@@ -158,7 +158,7 @@ impl App {
                             self.edit_entry(&entry)?
                         }
                         return Ok(Redraw(true));
-                    },
+                    }
                     Event::New => {
                         self.mode = AppMode::NewEntry;
                         return Ok(Redraw(true));
@@ -173,29 +173,25 @@ impl App {
                     _ => {}
                 };
             }
-            AppMode::NewEntry => {
-                match event {
-                    Event::Select => {
-                        self.mode = AppMode::Standard;
-                        self.new_entry()?;
-                        return Ok(Redraw(true));
-                    }
-                    Event::Back => {
-                        self.mode = AppMode::Standard;
-                        return Ok(Redraw(true));
-                    }
-                    _ => {}
+            AppMode::NewEntry => match event {
+                Event::Select => {
+                    self.mode = AppMode::Standard;
+                    self.new_entry()?;
+                    return Ok(Redraw(true));
                 }
-            }
-            AppMode::Error(_) => {
-                match event {
-                    Event::Select | Event::Back => {
-                        self.mode = AppMode::Standard;
-                        return Ok(Redraw(true));
-                    }
-                    _ => {}
+                Event::Back => {
+                    self.mode = AppMode::Standard;
+                    return Ok(Redraw(true));
                 }
-            }
+                _ => {}
+            },
+            AppMode::Error(_) => match event {
+                Event::Select | Event::Back => {
+                    self.mode = AppMode::Standard;
+                    return Ok(Redraw(true));
+                }
+                _ => {}
+            },
         }
         Ok(Redraw(false))
     }
