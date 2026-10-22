@@ -104,7 +104,7 @@ impl<'a> App<'a> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
             Event::Select => {
-                if let Some(entry) = page.select() {
+                if let Some(entry) = page.select(self.journal) {
                     self.edit_entry(&entry)?
                 }
                 return Ok(Redraw(true));

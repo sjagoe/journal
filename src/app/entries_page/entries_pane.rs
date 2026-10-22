@@ -170,10 +170,9 @@ impl Navigable for EntriesPane {
         }
     }
 
-    fn select(&self) -> Option<String> {
-        // let section = journal.section(&(&self.pane_kind).into());
-        None
-        // Some(self.section[self.selected_index].name.to_string())
+    fn select(&self, journal: &Journal) -> Option<String> {
+        let section = journal.section(&(&self.pane_kind).into());
+        Some(section[self.selected_index].name.to_string())
     }
 
     // fn selected_item(&self) -> String {

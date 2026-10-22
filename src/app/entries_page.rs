@@ -117,12 +117,12 @@ impl Navigable for EntriesPage {
         pane.previous_selection();
     }
 
-    fn select(&self) -> Option<String> {
+    fn select(&self, journal: &Journal) -> Option<String> {
         let pane = match self.active_pane {
             ActivePane::General => &self.general_pane,
             ActivePane::Narrative => &self.narrative_pane,
         };
-        pane.select()
+        pane.select(journal)
     }
 
     // fn selected_item(&self) -> String {
