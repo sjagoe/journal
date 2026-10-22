@@ -1,5 +1,6 @@
 use std::{
     env,
+    ffi::OsStr,
     fs::{self, File},
     io::{self, BufReader},
     os::unix::fs::PermissionsExt,
@@ -19,7 +20,7 @@ use age::{
 use color_eyre::Result;
 use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
-use shell_words::{split, join};
+use shell_words::{join, split};
 
 use crate::{
     config::Config,
@@ -81,7 +82,9 @@ fn editor_from_string(editor: &str) -> Result<(String, Vec<String>), JournalErro
     Ok((prog.to_string(), args.to_vec()))
 }
 
-fn get_editor_command(configured_editor: Option<String>) -> Result<(String, Vec<String>), JournalError> {
+fn get_editor_command(
+    configured_editor: Option<String>,
+) -> Result<(String, Vec<String>), JournalError> {
     match configured_editor {
         Some(ref editor) => editor_from_string(editor),
         None => {
@@ -112,7 +115,8 @@ pub struct EntryEditor {
 
 impl EntryEditor {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
-        let (editor, editor_args) = get_editor_command(config.editor.as_ref().map(|editor| editor.to_owned()))?;
+        let (editor, editor_args) =
+            get_editor_command(config.editor.as_ref().map(|editor| editor.to_owned()))?;
 
         let entry_editor = EntryEditor {
             identity: config.identity.to_owned(),
@@ -169,25 +173,10 @@ impl EntryEditor {
         Ok(())
     }
 
-    fn spawn_editor(&self, filename: &str) -> Result<bool, JournalError> {
-        let dir = tempfile::tempdir().map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
-        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
-
-        let identities = self.load_identities()?;
-        let input_path = dir.path().join("input.org");
-
-        let mut output_path = PathBuf::new();
-        output_path.push(&self.journal_path);
-        output_path.push(filename);
-        decrypt(output_path.clone(), input_path.clone(), &identities)?;
-
-        let pre_edit_hash =
-            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
-
+    fn spawn_editor<P: AsRef<OsStr>>(&self, decrypted_path: P) -> Result<(), JournalError> {
         let mut command = Command::new(&self.editor);
         command.args(&self.editor_args);
-        command.arg(&input_path);
+        command.arg(decrypted_path);
 
         if let Ok(mut child) = command.spawn() {
             if let Ok(status) = child.wait() {
@@ -202,24 +191,38 @@ impl EntryEditor {
             return Err(JournalError::Error(ErrorKind::Subprocess));
         }
 
+        Ok(())
+    }
+
+    fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
+        let dir = tempfile::tempdir().map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
+        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
+
+        let identities = self.load_identities()?;
+        let input_path = dir.path().join("input.org");
+
+        decrypt(encrypted_file_path, &input_path.clone(), &identities)?;
+
+        let pre_edit_hash =
+            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+
+        self.spawn_editor(&input_path)?;
+
+        // fixme: We don't want to discard changes in this case!
         let post_edit_hash =
             sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
 
         if pre_edit_hash == post_edit_hash {
-            println!("{} wasn't changed, skipping re-encryption.", filename);
             return Ok(false);
         }
 
-        self.encrypt(output_path, input_path)?;
+        self.encrypt(encrypted_file_path, &input_path)?;
 
         Ok(true)
     }
 
-    pub fn edit(&self, entry: &str) -> Result<bool, JournalError> {
-        let filename = format!("{}.age", entry);
-
-        tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
-
+    fn create_or_edit_entry(&self, filename: &str) -> Result<bool, JournalError> {
         let display_editor = if self.editor_args.is_empty() {
             self.editor.to_string()
         } else {
@@ -228,12 +231,32 @@ impl EntryEditor {
 
         eprintln!("Opening {} with {}", filename, display_editor);
 
-        let error = self.spawn_editor(&filename).err();
+        let mut encrypted_file_path = PathBuf::new();
+        encrypted_file_path.push(&self.journal_path);
+        encrypted_file_path.push(filename);
+
+        let changed = self.decrypt_and_edit_entry(&encrypted_file_path)?;
+        if !changed {
+            println!("{} wasn't changed, skipping re-encryption.", filename);
+        }
+        Ok(changed)
+    }
+
+    pub fn edit(&self, entry: &str) -> Result<bool, JournalError> {
+        let filename = format!("{}.age", entry);
+
+        tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
+
+        let (changed, error) = match self.create_or_edit_entry(&filename) {
+            Ok(changed) => (changed, None),
+            Err(error) => (true, Some(error)),
+        };
+
         tui::init().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
 
         if let Some(e) = error {
             return Err(e);
         }
-        Ok(true)
+        Ok(changed)
     }
 }
