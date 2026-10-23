@@ -10,7 +10,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(4), Constraint::Length(1)]);
-    let [window, statusbar] = chunks.areas(f.area());
+    let [window, _statusbar] = chunks.areas(f.area());
 
     app.draw(f, window);
     // app.draw_context_hint(f, statusbar);

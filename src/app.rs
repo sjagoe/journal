@@ -20,12 +20,9 @@ mod pagination;
 
 use crate::app::entries_page::ActivePane;
 use crate::errors::{ErrorKind, JournalError};
+use crate::journal::EntryKind;
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
-use crate::{
-    app::events::{ActionInfo, Event},
-    journal::EntryKind,
-};
 use crate::{config::Config, ui::centered_rect};
 
 pub struct Redraw(pub bool);

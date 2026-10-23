@@ -16,11 +16,7 @@ mod traits;
 mod tui;
 mod ui;
 
-use crate::{
-    app::{App, events::Event},
-    config::Config,
-    ui::ui,
-};
+use crate::{app::App, config::Config, ui::ui};
 
 const APP_NAME: &str = "personal-journal";
 
