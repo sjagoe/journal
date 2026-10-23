@@ -172,8 +172,8 @@ impl App {
         f.render_widget(hint, area);
     }
 
-    fn edit_entry(&mut self, entry: &str) -> Result<(), JournalError> {
-        let file_changed = self.entry_editor.edit(entry)?;
+    fn edit_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let file_changed = self.entry_editor.edit(kind, entry)?;
         if !file_changed {
             return Ok(());
         }
@@ -189,23 +189,21 @@ impl App {
         Ok(())
     }
 
-    fn new_entry(&mut self, new_entry: &str) -> Result<(), JournalError> {
-        let kind = EntryKind::from(&self.entries_page.active_pane);
-
+    fn new_entry(&mut self, kind: &EntryKind, new_entry: &str) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.journal = self.journal.with_new_entry(&kind, new_entry, &repo);
+        self.journal = self.journal.with_new_entry(kind, new_entry, &repo);
 
-        self.edit_entry(new_entry).map_err(|err| match err {
+        self.edit_entry(kind, new_entry).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
         })
     }
 
-    fn edit_existing_entry(&mut self, entry: &str) -> Result<(), JournalError> {
-        self.edit_entry(entry).map_err(|err| match err {
+    fn edit_existing_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        self.edit_entry(kind, entry).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
         })
     }
@@ -217,7 +215,8 @@ impl App {
                 match event {
                     Event::Select => {
                         if let Some(entry) = page.select(&self.journal) {
-                            self.edit_existing_entry(&entry)?;
+                            let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                            self.edit_existing_entry(&entry_kind, &entry)?;
                         }
                         return Ok(Redraw(true));
                     }
@@ -235,7 +234,7 @@ impl App {
 
                         match self.entries_page.active_pane {
                             ActivePane::General => {
-                                self.new_entry(&default_name)?;
+                                self.new_entry(&EntryKind::General, &default_name)?;
                             }
                             ActivePane::Narrative => {
                                 let mut text_entry = ratin::InputField::new()
@@ -271,7 +270,7 @@ impl App {
                             ErrorKind::TextEntryFailed,
                         ]));
                     };
-                    self.new_entry(&entry_name)?;
+                    self.new_entry(&EntryKind::Narrative, &entry_name)?;
                     self.text_entry = None;
                     return Ok(Redraw(true));
                 }

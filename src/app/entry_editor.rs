@@ -27,6 +27,7 @@ use time::{OffsetDateTime, format_description::StaticFormatDescription};
 use crate::{
     config::Config,
     errors::{ErrorKind, JournalError},
+    journal::{EntryKind, entry_filename},
     tui,
 };
 
@@ -363,8 +364,8 @@ impl EntryEditor {
         Ok(new_file || edited)
     }
 
-    pub fn edit(&self, entry: &str) -> Result<bool, JournalError> {
-        let filename = format!("{}.age", entry);
+    pub fn edit(&self, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
+        let filename = entry_filename(kind, entry);
 
         tui::restore().map_err(|_| JournalError::Error(ErrorKind::TerminalInit))?;
 

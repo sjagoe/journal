@@ -86,11 +86,24 @@ pub struct Journal {
     pub narrative: JournalSection,
 }
 
-fn to_entries(repo: &Repository, changes: &LastChanged, items: &[String]) -> Vec<JournalEntry> {
+pub fn entry_filename(kind: &EntryKind, name: &str) -> String {
+    let directory = match kind {
+        EntryKind::General => "general",
+        EntryKind::Narrative => "narrative",
+    };
+    format!("{}/{}.age", directory, name)
+}
+
+fn to_entries(
+    kind: &EntryKind,
+    repo: &Repository,
+    changes: &LastChanged,
+    items: &[String],
+) -> Vec<JournalEntry> {
     items
         .iter()
         .map(|name| {
-            let filename = format!("{}.age", name);
+            let filename = entry_filename(kind, name);
             let path = Path::new(&filename);
             let status = repo.status_file(path).ok();
             let time = changes.get(&filename).copied();
@@ -110,11 +123,11 @@ impl Journal {
 
         let general = JournalSection::new(
             EntryKind::General,
-            to_entries(repo, &changes, &entries.general),
+            to_entries(&EntryKind::General, repo, &changes, &entries.general),
         );
         let narrative = JournalSection::new(
             EntryKind::Narrative,
-            to_entries(repo, &changes, &entries.narrative),
+            to_entries(&EntryKind::Narrative, repo, &changes, &entries.narrative),
         );
 
         Journal {
