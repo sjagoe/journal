@@ -415,29 +415,20 @@ impl EntryExporter {
     }
 
     fn check_progress(&mut self) -> Result<(), JournalError> {
-        let msg = format!("checking process {:?}", &self.export_process);
-        self.log(&msg);
-        self.log_dir();
         if let Some(ref mut export_process) = self.export_process {
             match export_process {
                 ExportProcess::Export(child) => {
                     if let Ok(Some(status)) = child.try_wait() {
-                        let msg = format!("child status {:?}", &status);
-                        self.log(&msg);
                         if status.success() {
                             self.export_process = None;
                             self.spawn_browser(&self.exported_path())?;
                         } else {
                             let message = format!("Editor exited with code {:?}", status.code());
-                            self.log(&message);
                             return Err(JournalError::chain(&[
                                 ErrorKind::Subprocess,
                                 ErrorKind::Wrapped(message),
                             ]));
                         }
-                    } else {
-                        let msg = format!("child still running");
-                        self.log(&msg);
                     }
                 }
                 ExportProcess::Render(child) => {
@@ -491,35 +482,6 @@ impl EntryExporter {
         }
     }
 
-    fn log(&self, line: &str) {
-        let mut location = PathBuf::new();
-        location.push(&self.entry_editor.journal_path);
-        location.push("export.log");
-        let mut file = File::options()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(&location)
-            .expect("Unable to open entries data");
-        writeln!(&mut file, "{line}").unwrap();
-        file.flush().unwrap();
-    }
-
-    fn log_dir(&self) {
-        let path = self.dir.path();
-        let msg = format!("Directory {:?}", &path);
-        self.log(&msg);
-        if let Some(dir) = read_dir(&path).ok() {
-            for entry in dir {
-                if let Some(item) = entry.ok() {
-                    let msg = format!("  dir entry {:?}", item);
-                    self.log(&msg);
-                }
-            }
-        }
-        self.log("");
-    }
-
     fn spawn_browser(&mut self, exported_path: &PathBuf) -> Result<(), JournalError> {
         let mut command = Command::new("xdg-open");
         command.arg(exported_path);
@@ -552,15 +514,8 @@ impl EntryExporter {
             .current_dir(&self.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
-        self.log("Creating emacs export process");
-
-        self.log_dir();
-
         if let Ok(child) = command.spawn() {
             self.export_process = Some(ExportProcess::Export(child));
-            let msg = format!("started process {:?}", &self.export_process);
-            self.log(&msg);
-            self.log_dir();
         } else {
             return Err(JournalError::chain(&[
                 ErrorKind::Subprocess,
@@ -593,8 +548,6 @@ impl EntryExporter {
         fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
-        self.log_dir();
-
         let identities = self.entry_editor.load_identities()?;
         let input_path = self.decrypted_path();
 
@@ -604,8 +557,6 @@ impl EntryExporter {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
         })?;
 
-        self.log_dir();
-
         symlink(&style_path, &target_style_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::FileWriteError,
@@ -613,11 +564,7 @@ impl EntryExporter {
             ])
         })?;
 
-        self.log_dir();
-
         self.spawn_exporter(&input_path)?;
-
-        self.log_dir();
 
         // let exported_path =
 
