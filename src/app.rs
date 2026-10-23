@@ -336,11 +336,11 @@ impl App {
             } => match event.code {
                 KeyCode::Enter => {
                     let err = || {
-                        return Err(JournalError::chain(&[
+                        Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
                             ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
-                        ]));
+                        ]))
                     };
                     self.mode = AppMode::Standard;
                     let entry_name = if let Some(ref mut text_entry) = self.text_entry {
@@ -430,26 +430,22 @@ impl App {
     }
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<Redraw, JournalError> {
-        match self.mode {
-            AppMode::ExportEntry => {
-                if let Some(ref mut exporter) = self.entry_exporter {
-                    match exporter.tick(tick_duration) {
-                        Ok(export_complete) => {
-                            if export_complete {
-                                self.mode = AppMode::Standard;
-                                self.entry_exporter = None;
-                            }
-                        }
-                        Err(e) => {
+        if let AppMode::ExportEntry = self.mode
+            && let Some(ref mut exporter) = self.entry_exporter {
+                match exporter.tick(tick_duration) {
+                    Ok(export_complete) => {
+                        if export_complete {
                             self.mode = AppMode::Standard;
                             self.entry_exporter = None;
-                            return Err(e);
                         }
+                    }
+                    Err(e) => {
+                        self.mode = AppMode::Standard;
+                        self.entry_exporter = None;
+                        return Err(e);
                     }
                 }
             }
-            _ => {}
-        }
         Ok(Redraw(false))
     }
 

@@ -1,7 +1,7 @@
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File, read_dir},
+    fs::{self, File},
     io::{self, BufReader, Write},
     os::unix::fs::{PermissionsExt, symlink},
     path::{Path, PathBuf},
@@ -453,7 +453,7 @@ impl EntryExporter {
         self.check_progress()?;
         let mut update_progress = || {
             if self.progress >= 1.0 {
-                return true;
+                true
             } else {
                 let duration: f64 = tick_duration.into();
                 let new = self.progress + (duration / 1000.0);
@@ -511,7 +511,7 @@ impl EntryExporter {
                 "org-html-export-to-html",
                 "--kill",
             ])
-            .current_dir(&self.dir.path())
+            .current_dir(self.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
         if let Ok(child) = command.spawn() {
@@ -538,11 +538,11 @@ impl EntryExporter {
         let journal_path = &self.entry_editor.journal_path;
 
         let mut encrypted_file_path = PathBuf::new();
-        encrypted_file_path.push(&journal_path);
+        encrypted_file_path.push(journal_path);
         encrypted_file_path.push(&self.filename);
 
         let mut style_path = PathBuf::new();
-        style_path.push(&journal_path);
+        style_path.push(journal_path);
         style_path.push("style.css.org");
 
         fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
