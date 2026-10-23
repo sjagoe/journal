@@ -299,16 +299,23 @@ impl App {
                 ..
             } => match event.code {
                 KeyCode::Enter => {
-                    self.mode = AppMode::Standard;
-                    let entry_name = if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.get_text().to_owned()
-                    } else {
+                    let err = || {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
                             ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
                         ]));
                     };
+                    self.mode = AppMode::Standard;
+                    let entry_name = if let Some(ref mut text_entry) = self.text_entry {
+                        text_entry.get_text().to_owned()
+                    } else {
+                        return err();
+                    };
+                    // fixme need actial validation
+                    if entry_name.is_empty() {
+                        return err();
+                    }
                     self.new_entry(&EntryKind::Narrative, &entry_name)?;
                     self.text_entry = None;
                     return Ok(Redraw(true));
