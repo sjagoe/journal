@@ -27,75 +27,41 @@ pub struct ActionInfo {
 
 impl From<KeyEvent> for Event {
     fn from(key: KeyEvent) -> Event {
-        match key {
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Enter,
-                ..
-            } => Event::Select,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Home,
-                ..
-            } => Event::Home,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::End,
-                ..
-            } => Event::End,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::PageUp,
-                ..
-            } => Event::PageUp,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::PageDown,
-                ..
-            } => Event::PageDown,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Up,
-                ..
-            } => Event::PreviousSelection,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Down,
-                ..
-            } => Event::NextSelection,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Tab,
-                ..
-            } => Event::SwitchPane,
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                code: KeyCode::Char(_)
-                | KeyCode::Backspace
-                | KeyCode::Delete
-                | KeyCode::Left
-                | KeyCode::Right,
-                ..
-            } => Event::TextEntry(key.code),
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                code: KeyCode::Char(character),
-                ..
-            } => match character {
-                'n' => Event::New,
-                'v' => Event::PageUp,
-                _ => Event::Invalid,
+        match key.modifiers {
+            KeyModifiers::NONE => {
+                match key.code {
+                    KeyCode::Enter => Event::Select,
+                    KeyCode::Home => Event::Home,
+                    KeyCode::End => Event::End,
+                    KeyCode::PageUp => Event::PageUp,
+                    KeyCode::PageDown => Event::PageDown,
+                    KeyCode::Up => Event::PreviousSelection,
+                    KeyCode::Down => Event::NextSelection,
+                    KeyCode::Tab => Event::SwitchPane,
+                    KeyCode::Char(_)
+                        | KeyCode::Backspace
+                        | KeyCode::Delete
+                        | KeyCode::Left
+                        | KeyCode::Right
+                        => Event::TextEntry(key.code),
+                    _ => Event::Invalid,
+                }
             }
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                code: KeyCode::Char(character),
-                ..
-            } => match character {
-                'g' => Event::Back,
-                'n' => Event::NextSelection,
-                'p' => Event::PreviousSelection,
-                'v' => Event::PageDown,
-                _ => Event::Invalid,
+            KeyModifiers::ALT => {
+                match key.code {
+                    KeyCode::Char('n') => Event::New,
+                    KeyCode::Char('v') => Event::PageUp,
+                    _ => Event::Invalid,
+                }
+            }
+            KeyModifiers::CONTROL => {
+                match key.code {
+                    KeyCode::Char('g') => Event::Back,
+                    KeyCode::Char('n') => Event::NextSelection,
+                    KeyCode::Char('p') => Event::PreviousSelection,
+                    KeyCode::Char('v') => Event::PageDown,
+                    _ => Event::Invalid,
+                }
             }
             _ => Event::Invalid,
         }
