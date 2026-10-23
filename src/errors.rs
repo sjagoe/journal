@@ -26,22 +26,28 @@ pub fn install_hooks() -> color_eyre::Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum JournalError {
     Error(ErrorKind),
 }
 
 impl JournalError {
     #[allow(dead_code)]
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> String {
         match &self {
             JournalError::Error(err) => err.as_str(),
         }
     }
+
+    pub fn chain(errors: &[ErrorKind]) -> Self {
+        let chain = ChainedError { errors: errors.to_vec() };
+        JournalError::Error(ErrorKind::Chained(chain))
+    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
+    Chained(ChainedError),
     Subprocess,
     TemporaryFile,
     TerminalInit,
@@ -50,9 +56,15 @@ pub enum ErrorKind {
     InvalidMode,
 }
 
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ChainedError {
+    errors: Vec<ErrorKind>,
+}
+
 impl ErrorKind {
-    pub fn as_str(&self) -> &str {
+    pub fn description(&self) -> &str {
         match *self {
+            ErrorKind::Chained(_) => "Multiple errors",
             ErrorKind::Subprocess => "Failed to execute subprocess",
             ErrorKind::TemporaryFile => "Failed to write temporary file",
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
@@ -61,12 +73,33 @@ impl ErrorKind {
             ErrorKind::InvalidMode => "App entered invalid state",
         }
     }
+
+    pub fn as_str(&self) -> String {
+        match self {
+            ErrorKind::Chained(chained) => {
+                if chained.errors.len() == 1 &&
+                    let Some(error) = chained.errors.first()
+                {
+                    return error.description().to_string();
+                }
+                let mut message = String::new();
+                let header = format!("{} ->\n", self.description());
+                message.push_str(&header);
+                for error in chained.errors.iter() {
+                    let submsg = format!("  {}\n", error.description());
+                    message.push_str(&submsg);
+                }
+                message
+            }
+            _ => self.description().to_string(),
+        }
+    }
 }
 
 impl fmt::Display for JournalError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            JournalError::Error(err) => write!(f, "{:?}", err.as_str()),
+        match self {
+            JournalError::Error(err) => write!(f, "{}", err.as_str()),
         }
     }
 }
@@ -74,7 +107,7 @@ impl fmt::Display for JournalError {
 impl Error for JournalError {
     fn description(&self) -> &str {
         match &self {
-            JournalError::Error(err) => err.as_str(),
+            JournalError::Error(err) => err.description(),
         }
     }
 }
