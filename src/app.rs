@@ -18,6 +18,7 @@ mod entry_editor;
 pub mod events;
 mod pagination;
 
+use crate::app::entries_page::ActivePane;
 use crate::errors::{ErrorKind, JournalError};
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
@@ -233,12 +234,19 @@ impl App {
                             .format(DEFAULT_ENTRY_FILENAME_FORMAT)
                             .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
 
-                        let mut text_entry = ratin::InputField::new()
-                            .with_placeholder("New entry name ...")
-                            .with_max_length(50);
-                        text_entry.set_text(&default_name);
-                        self.text_entry = Some(text_entry);
-                        self.mode = AppMode::NewEntry;
+                        match self.entries_page.active_pane {
+                            ActivePane::General => {
+                                self.new_entry(&default_name)?;
+                            }
+                            ActivePane::Narrative => {
+                                let mut text_entry = ratin::InputField::new()
+                                    .with_placeholder("New entry name ...")
+                                    .with_max_length(50);
+                                text_entry.set_text(&default_name);
+                                self.text_entry = Some(text_entry);
+                                self.mode = AppMode::NewEntry;
+                            }
+                        }
                         return Ok(Redraw(true));
                     }
                     Event::Home => page.home(),

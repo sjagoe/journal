@@ -9,10 +9,9 @@ use ratatui::{
 mod entries_pane;
 
 use crate::traits::{Drawable, Navigable};
-use crate::{
-    app::entries_page::entries_pane::{ActivePane, EntriesPane},
-    journal::Journal,
-};
+use crate::{app::entries_page::entries_pane::EntriesPane, journal::Journal};
+
+pub use crate::app::entries_page::entries_pane::ActivePane;
 
 pub struct EntriesPage {
     general_pane: EntriesPane,
