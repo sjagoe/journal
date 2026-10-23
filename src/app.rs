@@ -10,12 +10,15 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
+use time::macros::format_description;
+use time::{OffsetDateTime, format_description::StaticFormatDescription};
+
 mod entries_page;
 mod entry_editor;
 pub mod events;
 mod pagination;
 
-use crate::errors::JournalError;
+use crate::errors::{ErrorKind, JournalError};
 use crate::traits::{Drawable, Navigable};
 use crate::{app::entries_page::EntriesPage, journal::Journal};
 use crate::{
@@ -25,6 +28,21 @@ use crate::{
 use crate::{config::Config, ui::centered_rect};
 
 pub struct Redraw(pub bool);
+
+static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
+    format_description!("[year]-[month]");
+
+trait SetText {
+    fn set_text(&mut self, text: &str);
+}
+
+impl SetText for ratin::InputField {
+    fn set_text(&mut self, text: &str) {
+        for char in text.chars() {
+            self.handle_key(KeyCode::Char(char));
+        }
+    }
+}
 
 enum AppMode {
     Standard,
@@ -109,7 +127,7 @@ impl App {
         let mut constraints: Vec<Constraint> = vec![Constraint::Min(4)];
 
         if let AppMode::NewEntry = self.mode {
-            constraints.push(Constraint::Length(4));
+            constraints.push(Constraint::Length(3));
         };
 
         let layout = Layout::default()
@@ -139,11 +157,11 @@ impl App {
 
         self.set_height(viewport.height);
 
-        // if let Some(entry_area) = text_area {
-        //     if let Some(text_entry) = self.text_entry {
-        //         text_entry.render(frame, entry_area);
-        //     }
-        // }
+        if let Some(entry_area) = text_area
+            && let Some(ref mut text_entry) = self.text_entry
+        {
+            text_entry.render(frame, entry_area);
+        }
 
         if let AppMode::Error(error) = self.mode {
             self.display_error(frame, &error);
@@ -183,8 +201,7 @@ impl App {
         Ok(())
     }
 
-    fn new_entry(&mut self) -> Result<(), JournalError> {
-        let new_entry = "new-entry";
+    fn new_entry(&mut self, new_entry: &str) -> Result<(), JournalError> {
         let kind = EntryKind::from(&self.entries_page.active_pane);
 
         let repo = match Repository::open(&self.config.journal_path) {
@@ -209,9 +226,16 @@ impl App {
                         return Ok(Redraw(true));
                     }
                     Event::New => {
-                        self.text_entry = Some(ratin::InputField::new()
-                                               .with_placeholder("Enter your name...")
-                                               .with_max_length(50));
+                        // fixme
+                        let now = OffsetDateTime::now_local()
+                            .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
+                        let default_name = now
+                            .format(DEFAULT_ENTRY_FILENAME_FORMAT)
+                            .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
+
+                        let mut text_entry = ratin::InputField::new().with_max_length(50);
+                        text_entry.set_text(&default_name);
+                        self.text_entry = Some(text_entry);
                         self.mode = AppMode::NewEntry;
                         return Ok(Redraw(true));
                     }
@@ -228,7 +252,13 @@ impl App {
             AppMode::NewEntry => match event {
                 Event::Select => {
                     self.mode = AppMode::Standard;
-                    // self.new_entry()?;
+                    let entry_name = if let Some(ref mut text_entry) = self.text_entry {
+                        text_entry.get_text().to_owned()
+                    } else {
+                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                    };
+                    self.new_entry(&entry_name)?;
+                    self.text_entry = None;
                     return Ok(Redraw(true));
                 }
                 Event::Back => {

@@ -36,7 +36,14 @@ impl From<KeyEvent> for Event {
             (KeyCode::Up, 0) => Event::PreviousSelection,
             (KeyCode::Down, 0) => Event::NextSelection,
             (KeyCode::Tab, 0) => Event::SwitchPane,
-            (KeyCode::Char(_), 0) => Event::TextEntry(key.code),
+            (
+                KeyCode::Char(_)
+                | KeyCode::Backspace
+                | KeyCode::Delete
+                | KeyCode::Left
+                | KeyCode::Right,
+                0,
+            ) => Event::TextEntry(key.code),
             (keycode, modifiers) => {
                 if modifiers == KeyModifiers::ALT.bits() {
                     match keycode {
