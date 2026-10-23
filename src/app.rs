@@ -216,14 +216,14 @@ impl App {
                     Event::New => {
                         let now = OffsetDateTime::now_local().map_err(|_| {
                             JournalError::chain(&[
-                                ErrorKind::NewEntryFailed,
+                                ErrorKind::NewEntry,
                                 ErrorKind::GetCurrentTime,
                             ])
                         })?;
                         let default_name =
                             now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
                                 JournalError::chain(&[
-                                    ErrorKind::NewEntryFailed,
+                                    ErrorKind::NewEntry,
                                     ErrorKind::FormatDateTime,
                                 ])
                             })?;
@@ -262,7 +262,7 @@ impl App {
                     } else {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
-                            ErrorKind::NewEntryFailed,
+                            ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
                         ]));
                     };
@@ -281,7 +281,7 @@ impl App {
                     } else {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
-                            ErrorKind::NewEntryFailed,
+                            ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
                         ]));
                     }
@@ -292,7 +292,7 @@ impl App {
                     } else {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
-                            ErrorKind::NewEntryFailed,
+                            ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
                         ]));
                     }
@@ -303,7 +303,7 @@ impl App {
                     } else {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
-                            ErrorKind::NewEntryFailed,
+                            ErrorKind::NewEntry,
                             ErrorKind::TextEntryFailed,
                         ]));
                     }

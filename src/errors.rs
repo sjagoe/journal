@@ -55,7 +55,7 @@ pub enum ErrorKind {
     TerminalInit,
     Decryption,
     InvalidMode,
-    NewEntryFailed,
+    NewEntry,
     GetCurrentTime,
     FormatDateTime,
     TextEntryFailed,
@@ -75,10 +75,10 @@ impl ErrorKind {
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
             ErrorKind::Decryption => "Error decrypting entry",
             ErrorKind::InvalidMode => "App entered invalid state",
-            ErrorKind::NewEntryFailed => "Failed to create new entry",
             ErrorKind::GetCurrentTime => "Unable to fetch system time in local timezone",
             ErrorKind::FormatDateTime => "Failed to format time to string",
             ErrorKind::TextEntryFailed => "Text entry failed",
+            ErrorKind::NewEntry => "Failed to create new entry",
         }
     }
 
