@@ -3,7 +3,7 @@ use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Rect},
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span, Text},
@@ -102,7 +102,11 @@ impl App {
     }
 
     fn display_error(&self, frame: &mut Frame, error: &JournalError) {
-        let area = centered_rect(60, 25, frame.area());
+        let area = centered_rect(
+            Constraint::Percentage(60),
+            Constraint::Percentage(25),
+            frame.area(),
+        );
         let popup_block = Block::default()
             .padding(Padding::horizontal(1))
             .borders(Borders::ALL)
@@ -125,27 +129,6 @@ impl App {
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Line::from(self.title());
 
-        let mut constraints: Vec<Constraint> = vec![Constraint::Min(4)];
-
-        if let AppMode::NewEntry = self.mode {
-            constraints.push(Constraint::Length(3));
-        };
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints);
-
-        let (content_area, text_area) = match self.mode {
-            AppMode::NewEntry => {
-                let [content_area, text_area] = layout.areas(area);
-                (content_area, Some(text_area))
-            }
-            _ => {
-                let [content_area] = layout.areas(area);
-                (content_area, None)
-            }
-        };
-
         let content_block = Block::default()
             .padding(Padding::horizontal(0))
             .borders(Borders::TOP)
@@ -154,13 +137,17 @@ impl App {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, content_area, content_block, &self.journal);
+        let viewport = page.draw(frame, area, content_block, &self.journal);
 
         self.set_height(viewport.height);
 
-        if let Some(entry_area) = text_area
-            && let Some(ref mut text_entry) = self.text_entry
-        {
+        if let Some(ref mut text_entry) = self.text_entry {
+            let entry_area = centered_rect(
+                Constraint::Percentage(60),
+                Constraint::Length(3),
+                frame.area(),
+            );
+            frame.render_widget(Clear, entry_area);
             text_entry.render(frame, entry_area);
         }
 
@@ -249,7 +236,10 @@ impl App {
                         }
                         return Ok(Redraw(true));
                     }
-                    Event::Home => page.home(),
+                    Event::Home => {
+                        page.home();
+                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                    }
                     Event::End => page.end(),
                     Event::PageUp => page.pageup(self.height),
                     Event::PageDown => page.pagedown(self.height),
