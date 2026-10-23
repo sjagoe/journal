@@ -6,8 +6,6 @@ use time::UtcOffset;
 use time::macros::format_description;
 use time::{Timestamp, format_description::StaticFormatDescription};
 
-use crate::errors::{ErrorKind, JournalError};
-
 static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
 );
@@ -100,11 +98,11 @@ impl LastChanged {
         LastChanged { last_changed }
     }
 
-    pub fn get(&self, filename: &String) -> Result<String, JournalError> {
+    pub fn get(&self, filename: &String) -> Option<String> {
         if let Some(time) = self.last_changed.get(filename) {
-            return Ok(time.to_string());
+            Some(time.to_string())
+        } else {
+            None
         }
-
-        Err(JournalError::Error(ErrorKind::RepositoryWalkError))
     }
 }

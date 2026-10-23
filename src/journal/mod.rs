@@ -119,8 +119,8 @@ fn to_entries(repo: &Repository, changes: &LastChanged, items: &[String]) -> Vec
             let filename = format!("{}.age", name);
             let status_str = status(repo, &filename);
             match changes.get(&filename) {
-                Ok(time) => JournalEntry::new(name, &status_str, &time),
-                Err(_) => JournalEntry::new(name, &status_str, "unknown"),
+                Some(time) => JournalEntry::new(name, &status_str, &time),
+                None => JournalEntry::new(name, &status_str, "unknown"),
             }
         })
         .collect()
