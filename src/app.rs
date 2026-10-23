@@ -15,7 +15,6 @@ use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 mod entries_page;
 mod entry_editor;
-pub mod events;
 mod pagination;
 
 use crate::app::entries_page::ActivePane;
