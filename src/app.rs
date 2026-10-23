@@ -233,7 +233,9 @@ impl App {
                             .format(DEFAULT_ENTRY_FILENAME_FORMAT)
                             .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
 
-                        let mut text_entry = ratin::InputField::new().with_max_length(50);
+                        let mut text_entry = ratin::InputField::new()
+                            .with_placeholder("New entry name ...")
+                            .with_max_length(50);
                         text_entry.set_text(&default_name);
                         self.text_entry = Some(text_entry);
                         self.mode = AppMode::NewEntry;
