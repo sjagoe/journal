@@ -2,10 +2,12 @@ use crossterm::event::KeyCode;
 use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
-    Frame, layout::{Constraint, Direction, Layout, Rect}, prelude::Modifier, style::{Color, Style}, text::{Line, Span, Text}, widgets::{
-        Block, BorderType, Borders, Clear, Paragraph,
-        block::{Padding, Title},
-    },
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    prelude::Modifier,
+    style::{Color, Style},
+    text::{Line, Span, Text},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 mod entries_page;
@@ -102,7 +104,7 @@ impl App {
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
-        let title = Title::from(self.title());
+        let title = Line::from(self.title());
 
         let mut constraints: Vec<Constraint> = vec![Constraint::Min(4)];
 

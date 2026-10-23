@@ -45,7 +45,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<bool>
+where
+    <B as Backend>::Error: Send,
+    <B as Backend>::Error: Sync,
+    <B as Backend>::Error: 'static,
+{
     let mut redraw = false;
     loop {
         if redraw {
