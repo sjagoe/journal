@@ -215,10 +215,7 @@ impl App {
                     }
                     Event::New => {
                         let now = OffsetDateTime::now_local().map_err(|_| {
-                            JournalError::chain(&[
-                                ErrorKind::NewEntry,
-                                ErrorKind::GetCurrentTime,
-                            ])
+                            JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
                         })?;
                         let default_name =
                             now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
