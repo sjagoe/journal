@@ -47,6 +47,7 @@ pub enum ErrorKind {
     TerminalInit,
     RepositoryWalkError,
     Decryption,
+    InvalidMode,
 }
 
 impl ErrorKind {
@@ -57,6 +58,7 @@ impl ErrorKind {
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
             ErrorKind::RepositoryWalkError => "Failed to walk repository commits",
             ErrorKind::Decryption => "Error decrypting entry",
+            ErrorKind::InvalidMode => "App entered invalid state",
         }
     }
 }

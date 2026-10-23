@@ -14,6 +14,7 @@ pub enum Event {
     NextSelection,
     PreviousSelection,
     SwitchPane,
+    TextEntry(KeyCode),
     // ExternalEditor,
     Exit,
     Invalid,
@@ -35,6 +36,7 @@ impl From<KeyEvent> for Event {
             (KeyCode::Up, 0) => Event::PreviousSelection,
             (KeyCode::Down, 0) => Event::NextSelection,
             (KeyCode::Tab, 0) => Event::SwitchPane,
+            (KeyCode::Char(_), 0) => Event::TextEntry(key.code),
             (keycode, modifiers) => {
                 if modifiers == KeyModifiers::ALT.bits() {
                     match keycode {
@@ -78,6 +80,7 @@ impl From<&Event> for ActionInfo {
             Event::NextSelection => ("C-n", "Select the next item"),
             Event::PreviousSelection => ("C-p", "Select the previous item"),
             Event::SwitchPane => ("Tab", "Navigate between entry types"),
+            Event::TextEntry(_) => ("", ""),
             // We never want to see this but have to define it
             Event::Invalid => ("invalid", "invalid"),
         };

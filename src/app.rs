@@ -1,12 +1,8 @@
+use crossterm::event::KeyCode;
 use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
-    Frame,
-    layout::Rect,
-    prelude::Modifier,
-    style::{Color, Style},
-    text::{Line, Span, Text},
-    widgets::{
+    Frame, layout::{Constraint, Direction, Layout, Rect}, prelude::Modifier, style::{Color, Style}, text::{Line, Span, Text}, widgets::{
         Block, BorderType, Borders, Clear, Paragraph,
         block::{Padding, Title},
     },
@@ -41,6 +37,7 @@ pub struct App {
     entry_editor: EntryEditor,
     height: u16,
     mode: AppMode,
+    text_entry: Option<ratin::InputField>,
 }
 
 impl App {
@@ -60,6 +57,7 @@ impl App {
             entry_editor,
             height: 0,
             mode: AppMode::Standard,
+            text_entry: None,
         };
         Ok(app)
     }
@@ -105,6 +103,28 @@ impl App {
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Title::from(self.title());
+
+        let mut constraints: Vec<Constraint> = vec![Constraint::Min(4)];
+
+        if let AppMode::NewEntry = self.mode {
+            constraints.push(Constraint::Length(4));
+        };
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints);
+
+        let (content_area, text_area) = match self.mode {
+            AppMode::NewEntry => {
+                let [content_area, text_area] = layout.areas(area);
+                (content_area, Some(text_area))
+            }
+            _ => {
+                let [content_area] = layout.areas(area);
+                (content_area, None)
+            }
+        };
+
         let content_block = Block::default()
             .padding(Padding::horizontal(0))
             .borders(Borders::TOP)
@@ -113,9 +133,15 @@ impl App {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, area, content_block, &self.journal);
+        let viewport = page.draw(frame, content_area, content_block, &self.journal);
 
         self.set_height(viewport.height);
+
+        // if let Some(entry_area) = text_area {
+        //     if let Some(text_entry) = self.text_entry {
+        //         text_entry.render(frame, entry_area);
+        //     }
+        // }
 
         if let AppMode::Error(error) = self.mode {
             self.display_error(frame, &error);
@@ -181,6 +207,9 @@ impl App {
                         return Ok(Redraw(true));
                     }
                     Event::New => {
+                        self.text_entry = Some(ratin::InputField::new()
+                                               .with_placeholder("Enter your name...")
+                                               .with_max_length(50));
                         self.mode = AppMode::NewEntry;
                         return Ok(Redraw(true));
                     }
@@ -197,12 +226,34 @@ impl App {
             AppMode::NewEntry => match event {
                 Event::Select => {
                     self.mode = AppMode::Standard;
-                    self.new_entry()?;
+                    // self.new_entry()?;
                     return Ok(Redraw(true));
                 }
                 Event::Back => {
                     self.mode = AppMode::Standard;
+                    self.text_entry = None;
                     return Ok(Redraw(true));
+                }
+                Event::Home => {
+                    if let Some(ref mut text_entry) = self.text_entry {
+                        text_entry.handle_key(KeyCode::Home);
+                    } else {
+                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                    }
+                }
+                Event::End => {
+                    if let Some(ref mut text_entry) = self.text_entry {
+                        text_entry.handle_key(KeyCode::End);
+                    } else {
+                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                    }
+                }
+                Event::TextEntry(key) => {
+                    if let Some(ref mut text_entry) = self.text_entry {
+                        text_entry.handle_key(*key);
+                    } else {
+                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                    }
                 }
                 _ => {}
             },
