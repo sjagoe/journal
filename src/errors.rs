@@ -107,10 +107,8 @@ impl ErrorKind {
                     return error.description().to_string();
                 }
                 let mut message = String::new();
-                let header = format!("{}\n", self.description());
-                message.push_str(&header);
                 for error in chained.errors.iter() {
-                    let submsg = format!("  {}\n", error.as_str());
+                    let submsg = format!("{}\n  ", error.as_str());
                     message.push_str(&submsg);
                 }
                 message
