@@ -199,7 +199,15 @@ impl App {
 
         self.journal = self.journal.with_new_entry(&kind, new_entry, &repo);
 
-        self.edit_entry(new_entry)
+        self.edit_entry(new_entry).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+        })
+    }
+
+    fn edit_existing_entry(&mut self, entry: &str) -> Result<(), JournalError> {
+        self.edit_entry(entry).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
+        })
     }
 
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
@@ -209,7 +217,7 @@ impl App {
                 match event {
                     Event::Select => {
                         if let Some(entry) = page.select(&self.journal) {
-                            self.edit_entry(&entry)?
+                            self.edit_existing_entry(&entry)?;
                         }
                         return Ok(Redraw(true));
                     }
