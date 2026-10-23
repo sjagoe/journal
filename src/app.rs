@@ -238,13 +238,11 @@ impl App {
         })
     }
 
-    fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    fn begin_export_entry(&mut self) -> Result<(), JournalError> {
         if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter
-                .start_export(kind, entry)
-                .map_err(|err| match err {
-                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-                })?;
+            entry_exporter.start_export().map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+            })?;
         }
         Ok(())
     }
@@ -262,9 +260,9 @@ impl App {
                 KeyCode::Char('e') => {
                     if let Some(entry) = page.select(&self.journal) {
                         let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        let entry_exporter = EntryExporter::new(&self.config)?;
+                        let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
                         self.entry_exporter = Some(entry_exporter);
-                        self.begin_export_entry(&entry_kind, &entry)?;
+                        self.begin_export_entry()?;
                         self.mode = AppMode::ExportEntry;
                         return Ok(Redraw(false));
                     }
@@ -435,9 +433,18 @@ impl App {
         match self.mode {
             AppMode::ExportEntry => {
                 if let Some(ref mut exporter) = self.entry_exporter {
-                    if exporter.tick(tick_duration) {
-                        self.mode = AppMode::Standard;
-                        self.entry_exporter = None;
+                    match exporter.tick(tick_duration) {
+                        Ok(export_complete) => {
+                            if export_complete {
+                                self.mode = AppMode::Standard;
+                                self.entry_exporter = None;
+                            }
+                        }
+                        Err(e) => {
+                            self.mode = AppMode::Standard;
+                            self.entry_exporter = None;
+                            return Err(e);
+                        }
                     }
                 }
             }
