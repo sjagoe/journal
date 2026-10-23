@@ -1,4 +1,4 @@
-use ratatui::{layout::Rect, text::Span, widgets::Block, Frame};
+use ratatui::{Frame, layout::Rect, text::Span, widgets::Block};
 
 use crate::journal::Journal;
 

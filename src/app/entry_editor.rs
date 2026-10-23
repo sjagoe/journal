@@ -11,8 +11,8 @@ use std::{
 use age::{
     armor::ArmoredReader,
     cli_common::{
-        file_io::{InputReader, OutputFormat, OutputWriter},
         StdinGuard,
+        file_io::{InputReader, OutputFormat, OutputWriter},
     },
     decryptor::RecipientsDecryptor,
 };
@@ -22,7 +22,7 @@ use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
 use time::macros::format_description;
-use time::{format_description::StaticFormatDescription, OffsetDateTime};
+use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 use crate::{
     config::Config,

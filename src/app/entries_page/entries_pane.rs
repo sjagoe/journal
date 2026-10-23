@@ -1,10 +1,10 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     prelude::Modifier,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, List, ListItem},
-    Frame,
 };
 
 use time::format_description::StaticFormatDescription;
