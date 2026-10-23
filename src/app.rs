@@ -272,21 +272,21 @@ impl App {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(KeyCode::Home);
                     } else {
-                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                        return Err(JournalError::Error(ErrorKind::InvalidMode));
                     }
                 }
                 Event::End => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(KeyCode::End);
                     } else {
-                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                        return Err(JournalError::Error(ErrorKind::InvalidMode));
                     }
                 }
                 Event::TextEntry(key) => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(*key);
                     } else {
-                        return Err(JournalError::Error(crate::errors::ErrorKind::InvalidMode));
+                        return Err(JournalError::Error(ErrorKind::InvalidMode));
                     }
                 }
                 _ => {}
