@@ -237,26 +237,6 @@ impl App {
                 _ => {}
             },
             KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => match event.code {
-                KeyCode::Enter => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.edit_existing_entry(&entry_kind, &entry)?;
-                    }
-                    return Ok(Redraw(true));
-                }
-                KeyCode::Home => page.home(),
-                KeyCode::End => page.end(),
-                KeyCode::PageUp => page.pageup(self.height),
-                KeyCode::PageDown => page.pagedown(self.height),
-                KeyCode::Down => page.next_selection(),
-                KeyCode::Up => page.previous_selection(),
-                KeyCode::Tab => page.switch_pane(),
-                _ => {}
-            },
-            KeyEvent {
                 modifiers: KeyModifiers::ALT,
                 ..
             } => match event.code {
@@ -285,6 +265,26 @@ impl App {
                     }
                     return Ok(Redraw(true));
                 }
+                _ => {}
+            },
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => match event.code {
+                KeyCode::Enter => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.edit_existing_entry(&entry_kind, &entry)?;
+                    }
+                    return Ok(Redraw(true));
+                }
+                KeyCode::Home => page.home(),
+                KeyCode::End => page.end(),
+                KeyCode::PageUp => page.pageup(self.height),
+                KeyCode::PageDown => page.pagedown(self.height),
+                KeyCode::Down => page.next_selection(),
+                KeyCode::Up => page.previous_selection(),
+                KeyCode::Tab => page.switch_pane(),
                 _ => {}
             },
             _ => {}
