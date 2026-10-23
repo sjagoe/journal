@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, time::Duration};
 use std::io::BufReader;
 
 use color_eyre::Result;
@@ -54,6 +54,18 @@ where
             terminal.clear()?;
         }
         terminal.draw(|f| ui(f, app))?;
+
+        let tick_duration: u8 = 50;
+        if !event::poll(Duration::from_millis(tick_duration.into()))? {
+            redraw = match app.tick(tick_duration) {
+                Ok(redraw) => redraw.0,
+                Err(error) => {
+                    app.error(error);
+                    true
+                }
+            };
+            continue;
+        }
 
         let read_event = event::read()?;
 

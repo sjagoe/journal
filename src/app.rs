@@ -1,13 +1,14 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use entry_editor::EntryEditor;
+use entry_editor::{EntryEditor, EntryExporter};
 use git2::Repository;
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
     prelude::Modifier,
     style::{Color, Style},
+    symbols,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, LineGauge, Padding, Paragraph},
 };
 
 use time::macros::format_description;
@@ -41,9 +42,11 @@ impl SetText for ratin::InputField {
     }
 }
 
+#[derive(Debug)]
 enum AppMode {
     Standard,
     NewEntry,
+    ExportEntry,
     Error(JournalError),
 }
 
@@ -51,10 +54,10 @@ pub struct App {
     config: Config,
     journal: Journal,
     entries_page: EntriesPage,
-    entry_editor: EntryEditor,
     height: u16,
     mode: AppMode,
     text_entry: Option<ratin::InputField>,
+    entry_exporter: Option<EntryExporter>,
 }
 
 impl App {
@@ -66,15 +69,14 @@ impl App {
 
         let journal = Journal::from_file(&config.entries_path(), &repo);
         let entries_page = EntriesPage::new(&journal);
-        let entry_editor = EntryEditor::new(config)?;
         let app = App {
             config: config.clone(),
             journal,
             entries_page,
-            entry_editor,
             height: 0,
             mode: AppMode::Standard,
             text_entry: None,
+            entry_exporter: None,
         };
         Ok(app)
     }
@@ -122,6 +124,38 @@ impl App {
         frame.render_widget(content, area);
     }
 
+    fn draw_export_progress(&mut self, frame: &mut Frame) {
+        if let Some(ref exporter) = self.entry_exporter {
+            let progress = exporter.get_progress();
+            let progress_area = centered_rect(
+                Constraint::Percentage(60),
+                Constraint::Length(3),
+                frame.area(),
+            );
+
+            let progress_bar = LineGauge::default()
+                .block(Block::bordered().title(" Exporting ... "))
+                .filled_style(Style::new().white().on_black().bold())
+                .filled_symbol(symbols::block::FULL)
+                .ratio(progress);
+
+            frame.render_widget(Clear, progress_area);
+            frame.render_widget(progress_bar, progress_area);
+        }
+    }
+
+    fn draw_text_input(&mut self, frame: &mut Frame) {
+        if let Some(ref mut text_entry) = self.text_entry {
+            let entry_area = centered_rect(
+                Constraint::Percentage(60),
+                Constraint::Length(3),
+                frame.area(),
+            );
+            frame.render_widget(Clear, entry_area);
+            text_entry.render(frame, entry_area);
+        }
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Line::from(self.title());
 
@@ -137,14 +171,11 @@ impl App {
 
         self.set_height(viewport.height);
 
-        if let Some(ref mut text_entry) = self.text_entry {
-            let entry_area = centered_rect(
-                Constraint::Percentage(60),
-                Constraint::Length(3),
-                frame.area(),
-            );
-            frame.render_widget(Clear, entry_area);
-            text_entry.render(frame, entry_area);
+        match self.mode {
+            AppMode::Error(ref error) => self.display_error(frame, error),
+            AppMode::NewEntry => self.draw_text_input(frame),
+            AppMode::ExportEntry => self.draw_export_progress(frame),
+            _ => {}
         }
 
         if let AppMode::Error(ref error) = self.mode {
@@ -169,7 +200,8 @@ impl App {
     // }
 
     fn edit_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
-        let file_changed = self.entry_editor.edit(kind, entry)?;
+        let entry_editor = EntryEditor::new(&self.config)?;
+        let file_changed = entry_editor.edit(kind, entry)?;
         if !file_changed {
             return Ok(());
         }
@@ -206,12 +238,15 @@ impl App {
         })
     }
 
-    fn export_entry(&self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
-        self.entry_editor
-            .export(kind, entry)
-            .map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-            })
+    fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        if let Some(ref mut entry_exporter) = self.entry_exporter {
+            entry_exporter
+                .start_export(kind, entry)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+                })?;
+        }
+        Ok(())
     }
 
     fn handle_standard_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
@@ -227,8 +262,11 @@ impl App {
                 KeyCode::Char('e') => {
                     if let Some(entry) = page.select(&self.journal) {
                         let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.export_entry(&entry_kind, &entry)?;
-                        return Ok(Redraw(true));
+                        let entry_exporter = EntryExporter::new(&self.config)?;
+                        self.entry_exporter = Some(entry_exporter);
+                        self.begin_export_entry(&entry_kind, &entry)?;
+                        self.mode = AppMode::ExportEntry;
+                        return Ok(Redraw(false));
                     }
                 }
                 KeyCode::Char('n') => page.next_selection(),
@@ -372,6 +410,7 @@ impl App {
             AppMode::NewEntry => {
                 return self.handle_new_mode_event(event);
             }
+            AppMode::ExportEntry => {}
             AppMode::Error(_) => match event {
                 KeyEvent {
                     modifiers: KeyModifiers::NONE,
@@ -388,6 +427,21 @@ impl App {
                 }
                 _ => {}
             },
+        }
+        Ok(Redraw(false))
+    }
+
+    pub fn tick(&mut self, tick_duration: u8) -> Result<Redraw, JournalError> {
+        match self.mode {
+            AppMode::ExportEntry => {
+                if let Some(ref mut exporter) = self.entry_exporter {
+                    if exporter.tick(tick_duration) {
+                        self.mode = AppMode::Standard;
+                        self.entry_exporter = None;
+                    }
+                }
+            }
+            _ => {}
         }
         Ok(Redraw(false))
     }

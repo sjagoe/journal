@@ -21,6 +21,7 @@ use color_eyre::Result;
 use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
+use tempfile::TempDir;
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
@@ -453,7 +454,7 @@ impl EntryEditor {
         Ok(changed)
     }
 
-    pub fn export(&self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    pub fn export(&self, kind: &EntryKind, entry: &str, dir: &TempDir) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
 
         let mut encrypted_file_path = PathBuf::new();
@@ -464,8 +465,6 @@ impl EntryEditor {
         style_path.push(&self.journal_path);
         style_path.push("style.css.org");
 
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
@@ -495,5 +494,48 @@ impl EntryEditor {
         std::thread::sleep(std::time::Duration::from_millis(500));
 
         Ok(())
+    }
+}
+
+pub struct EntryExporter {
+    progress: f64,
+    entry_editor: EntryEditor,
+    dir: TempDir,
+}
+
+impl EntryExporter {
+    pub fn new(config: &Config) -> Result<Self, JournalError> {
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        let entry_editor = EntryEditor::new(config)?;
+        let exporter = Self {
+            progress: 0.0,
+            entry_editor,
+            dir,
+        };
+        Ok(exporter)
+    }
+
+    pub fn tick(&mut self, tick_duration: u8) -> bool {
+        if self.progress >= 1.0 {
+            true
+        } else {
+            let duration: f64 = tick_duration.into();
+            let new = self.progress + (duration / 1000.0);
+            self.progress = new;
+            false
+        }
+    }
+
+    pub fn get_progress(&self) -> f64 {
+        if self.progress >= 1.0 {
+            1.0
+        } else {
+            self.progress
+        }
+    }
+
+    pub fn start_export(&self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        self.entry_editor.export(kind, entry, &self.dir)
     }
 }
