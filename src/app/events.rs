@@ -7,6 +7,7 @@ pub enum Event {
     Select,
     New,
     Back,
+    BackOrExit,
     Home,
     End,
     PageUp,
@@ -16,7 +17,6 @@ pub enum Event {
     SwitchPane,
     TextEntry(KeyCode),
     // ExternalEditor,
-    Exit,
     Invalid,
 }
 
@@ -54,6 +54,7 @@ impl From<KeyEvent> for Event {
                 KeyCode::Char('n') => Event::NextSelection,
                 KeyCode::Char('p') => Event::PreviousSelection,
                 KeyCode::Char('v') => Event::PageDown,
+                KeyCode::Char('x') => Event::BackOrExit,
                 _ => Event::Invalid,
             },
             _ => Event::Invalid,
@@ -73,7 +74,7 @@ impl From<&Event> for ActionInfo {
             Event::Select => ("Enter", "Select"),
             Event::New => ("M-n", "Create new entry"),
             Event::Back => ("C-g", "Back"),
-            Event::Exit => ("C-x", "Exit"),
+            Event::BackOrExit => ("C-x", "Exit"),
             Event::Home => ("Home", "Go to the top"),
             Event::End => ("End", "Go to the bottom"),
             Event::PageUp => ("M-v", "Page Up"),

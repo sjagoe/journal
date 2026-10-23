@@ -4,7 +4,8 @@ use std::io::BufReader;
 use color_eyre::Result;
 use dirs::config_dir;
 
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event as CrosstermEvent, KeyEventKind};
+use errors::{ErrorKind, JournalError};
 use ratatui::{Terminal, backend::Backend};
 
 mod app;
@@ -65,14 +66,18 @@ where
                 // Skip events that are not KeyEventKind::Press
                 continue;
             }
-            if key.code == KeyCode::Char('x') && key.modifiers == KeyModifiers::CONTROL {
-                return Ok(true);
-            }
             let navigation_action = Event::from(key);
             redraw = match app.handle_event(&navigation_action) {
                 Ok(redraw) => redraw.0,
-                Err(error) => {
-                    app.error(error);
+                Err(ref error) => {
+                    match error {
+                        JournalError::Error(e) => match e {
+                            ErrorKind::AppExit => {
+                                return Ok(true);
+                            }
+                            _ => app.error(error.clone()),
+                        },
+                    }
                     true
                 }
             }

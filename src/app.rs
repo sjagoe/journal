@@ -157,7 +157,7 @@ impl App {
     }
 
     pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-        let actions = [Event::Exit, Event::Select, Event::New];
+        let actions = [Event::BackOrExit, Event::Select, Event::New];
 
         let keys_hint = actions
             .iter()
@@ -215,6 +215,9 @@ impl App {
         match self.mode {
             AppMode::Standard => {
                 match event {
+                    Event::BackOrExit => {
+                        return Err(JournalError::Error(ErrorKind::AppExit));
+                    }
                     Event::Select => {
                         if let Some(entry) = page.select(&self.journal) {
                             let entry_kind = EntryKind::from(&self.entries_page.active_pane);
@@ -276,7 +279,7 @@ impl App {
                     self.text_entry = None;
                     return Ok(Redraw(true));
                 }
-                Event::Back => {
+                Event::Back | Event::BackOrExit => {
                     self.mode = AppMode::Standard;
                     self.text_entry = None;
                     return Ok(Redraw(true));
@@ -317,7 +320,7 @@ impl App {
                 _ => {}
             },
             AppMode::Error(_) => match event {
-                Event::Select | Event::Back => {
+                Event::Select | Event::Back | Event::BackOrExit => {
                     self.mode = AppMode::Standard;
                     return Ok(Redraw(true));
                 }
