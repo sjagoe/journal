@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use git2::Repository;
+use git2::{Repository, Status};
 use serde::{Deserialize, Serialize};
 
 mod changes;
@@ -28,15 +28,15 @@ pub struct SerializedEntries {
 #[derive(Clone, Debug)]
 pub struct JournalEntry {
     pub name: String,
-    pub status: String,
+    pub status: Option<Status>,
     pub last_modified: String,
 }
 
 impl JournalEntry {
-    fn new(name: &str, status: &str, last_modified: &str) -> JournalEntry {
+    fn new(name: &str, status: Option<Status>, last_modified: &str) -> JournalEntry {
         JournalEntry {
             name: name.to_owned(),
-            status: status.to_owned(),
+            status: status,
             last_modified: last_modified.to_owned(),
         }
     }
@@ -81,46 +81,19 @@ pub struct Journal {
     pub narrative: JournalSection,
 }
 
-fn status(repo: &Repository, filename: &String) -> String {
-    let path = Path::new(&filename);
-    let mut index = "?";
-    let mut wt = "?";
-
-    if let Ok(status) = repo.status_file(path) {
-        index = " ";
-        wt = " ";
-        if status.is_index_deleted() {
-            index = "D";
-        } else if status.is_index_modified() || status.is_index_typechange() {
-            index = "M";
-        } else if status.is_index_new() {
-            index = "A";
-        } else if status.is_index_renamed() {
-            index = "R";
-        }
-        if status.is_wt_deleted() {
-            wt = "D";
-        } else if status.is_wt_modified() || status.is_wt_typechange() {
-            wt = "M";
-        } else if status.is_wt_new() {
-            wt = "A";
-        } else if status.is_wt_renamed() {
-            wt = "R";
-        }
-    };
-
-    format!("{}{}", index, wt)
-}
-
 fn to_entries(repo: &Repository, changes: &LastChanged, items: &[String]) -> Vec<JournalEntry> {
     items
         .iter()
         .map(|name| {
             let filename = format!("{}.age", name);
-            let status_str = status(repo, &filename);
+            let path = Path::new(&filename);
+            let status = match repo.status_file(path) {
+                Ok(status) => Some(status),
+                Err(_) => None,
+            };
             match changes.get(&filename) {
-                Some(time) => JournalEntry::new(name, &status_str, &time),
-                None => JournalEntry::new(name, &status_str, "unknown"),
+                Some(time) => JournalEntry::new(name, status, &time),
+                None => JournalEntry::new(name, status, "unknown"),
             }
         })
         .collect()

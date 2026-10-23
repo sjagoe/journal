@@ -1,3 +1,4 @@
+use git2::Status;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -20,6 +21,36 @@ use crate::{
 static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
 );
+
+fn format_status(status: &Option<Status>) -> String {
+    let mut index = "?";
+    let mut wt = "?";
+
+    if let Some(status) = status {
+        index = " ";
+        wt = " ";
+        if status.is_index_deleted() {
+            index = "D";
+        } else if status.is_index_modified() || status.is_index_typechange() {
+            index = "M";
+        } else if status.is_index_new() {
+            index = "A";
+        } else if status.is_index_renamed() {
+            index = "R";
+        }
+        if status.is_wt_deleted() {
+            wt = "D";
+        } else if status.is_wt_modified() || status.is_wt_typechange() {
+            wt = "M";
+        } else if status.is_wt_new() {
+            wt = "?";
+        } else if status.is_wt_renamed() {
+            wt = "R";
+        }
+    };
+
+    format!("{}{}", index, wt)
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ActivePane {
@@ -103,7 +134,7 @@ impl Drawable for EntriesPane {
 
             let line = Line::from(vec![
                 Span::styled(
-                    format!("{} ", item.status),
+                    format!("{} ", format_status(&item.status)),
                     style.add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
