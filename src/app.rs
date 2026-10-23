@@ -237,10 +237,7 @@ impl App {
                         }
                         return Ok(Redraw(true));
                     }
-                    Event::Home => {
-                        page.home();
-                        return Err(JournalError::Error(ErrorKind::InvalidMode));
-                    }
+                    Event::Home => page.home(),
                     Event::End => page.end(),
                     Event::PageUp => page.pageup(self.height),
                     Event::PageDown => page.pagedown(self.height),
