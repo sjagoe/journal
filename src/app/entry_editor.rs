@@ -451,12 +451,12 @@ impl EntryExporter {
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<bool, JournalError> {
         self.check_progress()?;
-        let mut update_progress = || {
+        let mut update_progress = |factor| {
             if self.progress >= 1.0 {
                 true
             } else {
                 let duration: f64 = tick_duration.into();
-                let new = self.progress + (duration / 1000.0);
+                let new = self.progress + (duration / factor);
                 self.progress = new;
                 false
             }
@@ -464,14 +464,17 @@ impl EntryExporter {
         if let Some(ref export_process) = self.export_process {
             match export_process {
                 ExportProcess::Export(_) => {
+                    // Just long progress bars .. we don't really have
+                    // anything to go on to monitor progress
+                    let _ = update_progress(10000.0);
                     return Ok(false);
                 }
                 _ => {
-                    return Ok(update_progress());
+                    return Ok(update_progress(1000.0));
                 }
             }
         }
-        Ok(update_progress())
+        Ok(update_progress(1000.0))
     }
 
     pub fn get_progress(&self) -> f64 {
