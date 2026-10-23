@@ -28,41 +28,34 @@ pub struct ActionInfo {
 impl From<KeyEvent> for Event {
     fn from(key: KeyEvent) -> Event {
         match key.modifiers {
-            KeyModifiers::NONE => {
-                match key.code {
-                    KeyCode::Enter => Event::Select,
-                    KeyCode::Home => Event::Home,
-                    KeyCode::End => Event::End,
-                    KeyCode::PageUp => Event::PageUp,
-                    KeyCode::PageDown => Event::PageDown,
-                    KeyCode::Up => Event::PreviousSelection,
-                    KeyCode::Down => Event::NextSelection,
-                    KeyCode::Tab => Event::SwitchPane,
-                    KeyCode::Char(_)
-                        | KeyCode::Backspace
-                        | KeyCode::Delete
-                        | KeyCode::Left
-                        | KeyCode::Right
-                        => Event::TextEntry(key.code),
-                    _ => Event::Invalid,
-                }
-            }
-            KeyModifiers::ALT => {
-                match key.code {
-                    KeyCode::Char('n') => Event::New,
-                    KeyCode::Char('v') => Event::PageUp,
-                    _ => Event::Invalid,
-                }
-            }
-            KeyModifiers::CONTROL => {
-                match key.code {
-                    KeyCode::Char('g') => Event::Back,
-                    KeyCode::Char('n') => Event::NextSelection,
-                    KeyCode::Char('p') => Event::PreviousSelection,
-                    KeyCode::Char('v') => Event::PageDown,
-                    _ => Event::Invalid,
-                }
-            }
+            KeyModifiers::NONE => match key.code {
+                KeyCode::Enter => Event::Select,
+                KeyCode::Home => Event::Home,
+                KeyCode::End => Event::End,
+                KeyCode::PageUp => Event::PageUp,
+                KeyCode::PageDown => Event::PageDown,
+                KeyCode::Up => Event::PreviousSelection,
+                KeyCode::Down => Event::NextSelection,
+                KeyCode::Tab => Event::SwitchPane,
+                KeyCode::Char(_)
+                | KeyCode::Backspace
+                | KeyCode::Delete
+                | KeyCode::Left
+                | KeyCode::Right => Event::TextEntry(key.code),
+                _ => Event::Invalid,
+            },
+            KeyModifiers::ALT => match key.code {
+                KeyCode::Char('n') => Event::New,
+                KeyCode::Char('v') => Event::PageUp,
+                _ => Event::Invalid,
+            },
+            KeyModifiers::CONTROL => match key.code {
+                KeyCode::Char('g') => Event::Back,
+                KeyCode::Char('n') => Event::NextSelection,
+                KeyCode::Char('p') => Event::PreviousSelection,
+                KeyCode::Char('v') => Event::PageDown,
+                _ => Event::Invalid,
+            },
             _ => Event::Invalid,
         }
     }

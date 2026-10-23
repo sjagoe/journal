@@ -40,7 +40,9 @@ impl JournalError {
     }
 
     pub fn chain(errors: &[ErrorKind]) -> Self {
-        let chain = ChainedError { errors: errors.to_vec() };
+        let chain = ChainedError {
+            errors: errors.to_vec(),
+        };
         JournalError::Error(ErrorKind::Chained(chain))
     }
 }
@@ -83,8 +85,8 @@ impl ErrorKind {
     pub fn as_str(&self) -> String {
         match self {
             ErrorKind::Chained(chained) => {
-                if chained.errors.len() == 1 &&
-                    let Some(error) = chained.errors.first()
+                if chained.errors.len() == 1
+                    && let Some(error) = chained.errors.first()
                 {
                     return error.description().to_string();
                 }
