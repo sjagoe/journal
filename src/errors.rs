@@ -108,7 +108,11 @@ impl ErrorKind {
                 }
                 let mut message = String::new();
                 for error in chained.errors.iter() {
-                    let submsg = format!("{}\n  ", error.as_str());
+                    let end = match error {
+                        ErrorKind::Chained(_) => "",
+                        _ => "\n  ",
+                    };
+                    let submsg = format!("{}{}", error.as_str(), end);
                     message.push_str(&submsg);
                 }
                 message
