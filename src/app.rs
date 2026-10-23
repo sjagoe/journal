@@ -1,4 +1,4 @@
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use entry_editor::EntryEditor;
 use git2::Repository;
 use ratatui::{
@@ -156,21 +156,21 @@ impl App {
         }
     }
 
-    pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-        let actions = [Event::BackOrExit, Event::Select, Event::New];
+    // pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
+    //     let actions = [Event::BackOrExit, Event::Select, Event::New];
 
-        let keys_hint = actions
-            .iter()
-            .map(|a| ActionInfo::from(a).to_string())
-            .collect::<Vec<String>>()
-            .join(" | ");
-        let content = Span::styled(keys_hint, Style::default());
-        let block = Block::default()
-            .padding(Padding::horizontal(1))
-            .style(Style::default().fg(Color::Black).bg(Color::Gray));
-        let hint = Paragraph::new(Line::from(content)).block(block);
-        f.render_widget(hint, area);
-    }
+    //     let keys_hint = actions
+    //         .iter()
+    //         .map(|a| ActionInfo::from(a).to_string())
+    //         .collect::<Vec<String>>()
+    //         .join(" | ");
+    //     let content = Span::styled(keys_hint, Style::default());
+    //     let block = Block::default()
+    //         .padding(Padding::horizontal(1))
+    //         .style(Style::default().fg(Color::Black).bg(Color::Gray));
+    //     let hint = Paragraph::new(Line::from(content)).block(block);
+    //     f.render_widget(hint, area);
+    // }
 
     fn edit_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let file_changed = self.entry_editor.edit(kind, entry)?;
@@ -218,68 +218,91 @@ impl App {
             })
     }
 
-    pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
+    fn handle_standard_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
-        match self.mode {
-            AppMode::Standard => {
-                match event {
-                    Event::BackOrExit => {
-                        return Err(JournalError::Error(ErrorKind::AppExit));
-                    }
-                    Event::Export => {
-                        if let Some(entry) = page.select(&self.journal) {
-                            let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                            self.export_entry(&entry_kind, &entry)?;
-                            return Ok(Redraw(true));
-                        }
-                    }
-                    Event::Select => {
-                        if let Some(entry) = page.select(&self.journal) {
-                            let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                            self.edit_existing_entry(&entry_kind, &entry)?;
-                        }
+        match event {
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => match event.code {
+                KeyCode::Char('x') => {
+                    return Err(JournalError::Error(ErrorKind::AppExit));
+                }
+                KeyCode::Char('e') => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.export_entry(&entry_kind, &entry)?;
                         return Ok(Redraw(true));
                     }
-                    Event::New => {
-                        let now = OffsetDateTime::now_local().map_err(|_| {
-                            JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
-                        })?;
-                        let default_name =
-                            now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
-                                JournalError::chain(&[
-                                    ErrorKind::NewEntry,
-                                    ErrorKind::FormatDateTime,
-                                ])
-                            })?;
+                }
+                KeyCode::Char('n') => page.next_selection(),
+                KeyCode::Char('p') => page.previous_selection(),
+                KeyCode::Char('v') => page.pagedown(self.height),
+                _ => {}
+            },
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => match event.code {
+                KeyCode::Enter => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.edit_existing_entry(&entry_kind, &entry)?;
+                    }
+                    return Ok(Redraw(true));
+                }
+                KeyCode::Home => page.home(),
+                KeyCode::End => page.end(),
+                KeyCode::PageUp => page.pageup(self.height),
+                KeyCode::PageDown => page.pagedown(self.height),
+                KeyCode::Down => page.next_selection(),
+                KeyCode::Up => page.previous_selection(),
+                KeyCode::Tab => page.switch_pane(),
+                _ => {}
+            },
+            KeyEvent {
+                modifiers: KeyModifiers::ALT,
+                ..
+            } => match event.code {
+                KeyCode::Char('v') => page.pageup(self.height),
+                KeyCode::Char('n') => {
+                    let now = OffsetDateTime::now_local().map_err(|_| {
+                        JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
+                    })?;
+                    let default_name = now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
+                        JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
+                    })?;
 
-                        match self.entries_page.active_pane {
-                            ActivePane::General => {
-                                self.new_entry(&EntryKind::General, &default_name)?;
-                            }
-                            ActivePane::Narrative => {
-                                let mut text_entry = ratin::InputField::new()
-                                    .with_placeholder("New entry name ...")
-                                    .with_max_length(50);
-                                let name_prefix = format!("{}-", default_name);
-                                text_entry.set_text(&name_prefix);
-                                self.text_entry = Some(text_entry);
-                                self.mode = AppMode::NewEntry;
-                            }
+                    match self.entries_page.active_pane {
+                        ActivePane::General => {
+                            self.new_entry(&EntryKind::General, &default_name)?;
                         }
-                        return Ok(Redraw(true));
+                        ActivePane::Narrative => {
+                            let mut text_entry = ratin::InputField::new()
+                                .with_placeholder("New entry name ...")
+                                .with_max_length(50);
+                            let name_prefix = format!("{}-", default_name);
+                            text_entry.set_text(&name_prefix);
+                            self.text_entry = Some(text_entry);
+                            self.mode = AppMode::NewEntry;
+                        }
                     }
-                    Event::Home => page.home(),
-                    Event::End => page.end(),
-                    Event::PageUp => page.pageup(self.height),
-                    Event::PageDown => page.pagedown(self.height),
-                    Event::NextSelection => page.next_selection(),
-                    Event::PreviousSelection => page.previous_selection(),
-                    Event::SwitchPane => page.switch_pane(),
-                    _ => {}
-                };
-            }
-            AppMode::NewEntry => match event {
-                Event::Select => {
+                    return Ok(Redraw(true));
+                }
+                _ => {}
+            },
+            _ => {}
+        };
+        Ok(Redraw(false))
+    }
+
+    fn handle_new_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+        match event {
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                ..
+            } => match event.code {
+                KeyCode::Enter => {
                     self.mode = AppMode::Standard;
                     let entry_name = if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.get_text().to_owned()
@@ -294,9 +317,9 @@ impl App {
                     self.text_entry = None;
                     return Ok(Redraw(true));
                 }
-                Event::Home => {
+                KeyCode::Home | KeyCode::End | KeyCode::Char(_) => {
                     if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.handle_key(KeyCode::Home);
+                        text_entry.handle_key(event.code);
                     } else {
                         return Err(JournalError::chain(&[
                             ErrorKind::InvalidMode,
@@ -305,54 +328,58 @@ impl App {
                         ]));
                     }
                 }
-                Event::End => {
+                _ => {}
+            },
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                ..
+            } => {
+                let go_back = if event.code == KeyCode::Char('g') {
+                    true
+                } else if event.code == KeyCode::Char('x') {
                     if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.handle_key(KeyCode::End);
-                    } else {
-                        return Err(JournalError::chain(&[
-                            ErrorKind::InvalidMode,
-                            ErrorKind::NewEntry,
-                            ErrorKind::TextEntryFailed,
-                        ]));
-                    }
-                }
-                Event::TextEntry(key) => {
-                    if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.handle_key(*key);
-                    } else {
-                        return Err(JournalError::chain(&[
-                            ErrorKind::InvalidMode,
-                            ErrorKind::NewEntry,
-                            ErrorKind::TextEntryFailed,
-                        ]));
-                    }
-                }
-                event => {
-                    let go_back = if *event == Event::Back {
-                        true
-                    } else if *event == Event::BackOrExit {
-                        if let Some(ref mut text_entry) = self.text_entry {
-                            if text_entry.is_empty() {
-                                true
-                            } else {
-                                text_entry.clear();
-                                false
-                            }
+                        if text_entry.is_empty() {
+                            true
                         } else {
+                            text_entry.clear();
                             false
                         }
                     } else {
                         false
-                    };
-                    if go_back {
-                        self.mode = AppMode::Standard;
-                        self.text_entry = None;
-                        return Ok(Redraw(true));
                     }
+                } else {
+                    false
+                };
+                if go_back {
+                    self.mode = AppMode::Standard;
+                    self.text_entry = None;
+                    return Ok(Redraw(true));
                 }
-            },
+            }
+            _ => {}
+        }
+        Ok(Redraw(false))
+    }
+
+    pub fn handle_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+        match self.mode {
+            AppMode::Standard => {
+                return self.handle_standard_mode_event(event);
+            }
+            AppMode::NewEntry => {
+                return self.handle_new_mode_event(event);
+            }
             AppMode::Error(_) => match event {
-                Event::Select | Event::Back | Event::BackOrExit => {
+                KeyEvent {
+                    modifiers: KeyModifiers::NONE,
+                    code: KeyCode::Enter,
+                    ..
+                }
+                | KeyEvent {
+                    modifiers: KeyModifiers::CONTROL,
+                    code: KeyCode::Char('g') | KeyCode::Char('x'),
+                    ..
+                } => {
                     self.mode = AppMode::Standard;
                     return Ok(Redraw(true));
                 }

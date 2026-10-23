@@ -13,7 +13,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     let [window, statusbar] = chunks.areas(f.area());
 
     app.draw(f, window);
-    app.draw_context_hint(f, statusbar);
+    // app.draw_context_hint(f, statusbar);
 }
 
 /// helper function to create a centered rect using up certain percentage of the available rect `r`

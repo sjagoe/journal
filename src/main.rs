@@ -66,8 +66,7 @@ where
                 // Skip events that are not KeyEventKind::Press
                 continue;
             }
-            let navigation_action = Event::from(key);
-            redraw = match app.handle_event(&navigation_action) {
+            redraw = match app.handle_event(&key) {
                 Ok(redraw) => redraw.0,
                 Err(ref error) => {
                     match error {
