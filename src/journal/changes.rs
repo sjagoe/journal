@@ -99,10 +99,6 @@ impl LastChanged {
     }
 
     pub fn get(&self, filename: &String) -> Option<String> {
-        if let Some(time) = self.last_changed.get(filename) {
-            Some(time.to_string())
-        } else {
-            None
-        }
+        self.last_changed.get(filename).map(|time| time.to_string())
     }
 }
