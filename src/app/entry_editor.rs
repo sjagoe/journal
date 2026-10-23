@@ -207,8 +207,10 @@ impl EntryEditor {
 
     fn spawn_editor<P: AsRef<OsStr>>(&self, decrypted_path: P) -> Result<(), JournalError> {
         let mut command = Command::new(&self.editor);
-        command.args(&self.editor_args);
-        command.arg(decrypted_path);
+        command
+            .args(&self.editor_args)
+            .arg(decrypted_path)
+            .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
         if let Ok(mut child) = command.spawn() {
             if let Ok(status) = child.wait() {
