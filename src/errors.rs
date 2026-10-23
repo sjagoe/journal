@@ -54,6 +54,10 @@ pub enum ErrorKind {
     RepositoryWalkError,
     Decryption,
     InvalidMode,
+    NewEntryFailed,
+    GetCurrentTime,
+    FormatDateTime,
+    TextEntryFailed,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -71,6 +75,10 @@ impl ErrorKind {
             ErrorKind::RepositoryWalkError => "Failed to walk repository commits",
             ErrorKind::Decryption => "Error decrypting entry",
             ErrorKind::InvalidMode => "App entered invalid state",
+            ErrorKind::NewEntryFailed => "Failed to create new entry",
+            ErrorKind::GetCurrentTime => "Unable to fetch system time in local timezone",
+            ErrorKind::FormatDateTime => "Failed to format time to string",
+            ErrorKind::TextEntryFailed => "Text entry failed",
         }
     }
 

@@ -151,8 +151,8 @@ impl App {
             text_entry.render(frame, entry_area);
         }
 
-        if let AppMode::Error(error) = self.mode {
-            self.display_error(frame, &error);
+        if let AppMode::Error(ref error) = self.mode {
+            self.display_error(frame, error);
         }
     }
 
@@ -214,12 +214,11 @@ impl App {
                         return Ok(Redraw(true));
                     }
                     Event::New => {
-                        // fixme
                         let now = OffsetDateTime::now_local()
-                            .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
+                            .map_err(|_| JournalError::chain(&[ErrorKind::NewEntryFailed, ErrorKind::GetCurrentTime]))?;
                         let default_name = now
                             .format(DEFAULT_ENTRY_FILENAME_FORMAT)
-                            .map_err(|_| JournalError::Error(ErrorKind::InvalidMode))?;
+                            .map_err(|_| JournalError::chain(&[ErrorKind::NewEntryFailed, ErrorKind::FormatDateTime]))?;
 
                         match self.entries_page.active_pane {
                             ActivePane::General => {
@@ -253,7 +252,7 @@ impl App {
                     let entry_name = if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.get_text().to_owned()
                     } else {
-                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                        return Err(JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntryFailed, ErrorKind::TextEntryFailed]));
                     };
                     self.new_entry(&entry_name)?;
                     self.text_entry = None;
@@ -268,21 +267,21 @@ impl App {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(KeyCode::Home);
                     } else {
-                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                        return Err(JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntryFailed, ErrorKind::TextEntryFailed]));
                     }
                 }
                 Event::End => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(KeyCode::End);
                     } else {
-                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                        return Err(JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntryFailed, ErrorKind::TextEntryFailed]));
                     }
                 }
                 Event::TextEntry(key) => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(*key);
                     } else {
-                        return Err(JournalError::Error(ErrorKind::InvalidMode));
+                        return Err(JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntryFailed, ErrorKind::TextEntryFailed]));
                     }
                 }
                 _ => {}
