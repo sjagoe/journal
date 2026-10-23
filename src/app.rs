@@ -210,6 +210,14 @@ impl App {
         })
     }
 
+    fn export_entry(&self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        self.entry_editor
+            .export(kind, entry)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+            })
+    }
+
     pub fn handle_event(&mut self, event: &Event) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match self.mode {
@@ -217,6 +225,13 @@ impl App {
                 match event {
                     Event::BackOrExit => {
                         return Err(JournalError::Error(ErrorKind::AppExit));
+                    }
+                    Event::Export => {
+                        if let Some(entry) = page.select(&self.journal) {
+                            let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                            self.export_entry(&entry_kind, &entry)?;
+                            return Ok(Redraw(true));
+                        }
                     }
                     Event::Select => {
                         if let Some(entry) = page.select(&self.journal) {

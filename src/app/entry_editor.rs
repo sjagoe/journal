@@ -3,7 +3,7 @@ use std::{
     ffi::OsStr,
     fs::{self, File},
     io::{self, BufReader, Write},
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{PermissionsExt, symlink},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -267,6 +267,77 @@ impl EntryEditor {
         Ok(())
     }
 
+    fn spawn_exporter(&self, decrypted_path: &PathBuf) -> Result<PathBuf, JournalError> {
+        let mut command = Command::new("emacs");
+        command
+            .arg("-q")
+            .arg(decrypted_path)
+            .args([
+                "--batch",
+                "-f",
+                "org-mode",
+                "-f",
+                "org-html-export-to-html",
+                "--kill",
+            ])
+            .env("_JOURNAL_EMACS_EMBEDDED", "t");
+
+        if let Ok(mut child) = command.spawn() {
+            if let Ok(status) = child.wait() {
+                if !status.success() {
+                    let message = format!("Editor exited with code {:?}", status.code());
+                    return Err(JournalError::chain(&[
+                        ErrorKind::Subprocess,
+                        ErrorKind::Wrapped(message),
+                    ]));
+                }
+            } else {
+                return Err(JournalError::chain(&[
+                    ErrorKind::Subprocess,
+                    ErrorKind::Wrapped("Failed to wait for editor to exit".to_string()),
+                ]));
+            }
+        } else {
+            return Err(JournalError::chain(&[
+                ErrorKind::Subprocess,
+                ErrorKind::Wrapped("Failed to execute editor".to_string()),
+            ]));
+        }
+
+        let exported_path = decrypted_path.with_extension("html");
+
+        Ok(exported_path)
+    }
+
+    fn spawn_browser(&self, exported_path: &PathBuf) -> Result<(), JournalError> {
+        let mut command = Command::new("xdg-open");
+        command.arg(exported_path);
+
+        if let Ok(mut child) = command.spawn() {
+            if let Ok(status) = child.wait() {
+                if !status.success() {
+                    let message = format!("Browser exited with code {:?}", status.code());
+                    return Err(JournalError::chain(&[
+                        ErrorKind::Subprocess,
+                        ErrorKind::Wrapped(message),
+                    ]));
+                }
+            } else {
+                return Err(JournalError::chain(&[
+                    ErrorKind::Subprocess,
+                    ErrorKind::Wrapped("Failed to wait for browser to launch".to_string()),
+                ]));
+            }
+        } else {
+            return Err(JournalError::chain(&[
+                ErrorKind::Subprocess,
+                ErrorKind::Wrapped("Failed to execute browser".to_string()),
+            ]));
+        }
+
+        Ok(())
+    }
+
     fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
         let dir = tempfile::tempdir()
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
@@ -380,5 +451,49 @@ impl EntryEditor {
             return Err(e);
         }
         Ok(changed)
+    }
+
+    pub fn export(&self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let filename = entry_filename(kind, entry);
+
+        let mut encrypted_file_path = PathBuf::new();
+        encrypted_file_path.push(&self.journal_path);
+        encrypted_file_path.push(filename);
+
+        let mut style_path = PathBuf::new();
+        style_path.push(&self.journal_path);
+        style_path.push("style.css.org");
+
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        let identities = self.load_identities()?;
+        let input_path = dir.path().join("input.org");
+
+        let target_style_path = dir.path().join("style.css.org");
+
+        decrypt(encrypted_file_path, input_path.clone(), &identities).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
+        })?;
+
+        symlink(&style_path, &target_style_path).map_err(|_| {
+            JournalError::chain(&[
+                ErrorKind::FileWriteError,
+                ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
+            ])
+        })?;
+
+        let exported_path = self.spawn_exporter(&input_path)?;
+
+        self.spawn_browser(&exported_path)?;
+
+        // FIXME this is terrible.
+        // We need to background this and wait for it to complete
+        // The sleep for firefox to read the file before we delete it is also not great...
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        Ok(())
     }
 }

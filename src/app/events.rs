@@ -16,7 +16,7 @@ pub enum Event {
     PreviousSelection,
     SwitchPane,
     TextEntry(KeyCode),
-    // ExternalEditor,
+    Export,
     Invalid,
 }
 
@@ -50,6 +50,7 @@ impl From<KeyEvent> for Event {
                 _ => Event::Invalid,
             },
             KeyModifiers::CONTROL => match key.code {
+                KeyCode::Char('e') => Event::Export,
                 KeyCode::Char('g') => Event::Back,
                 KeyCode::Char('n') => Event::NextSelection,
                 KeyCode::Char('p') => Event::PreviousSelection,
@@ -83,6 +84,10 @@ impl From<&Event> for ActionInfo {
             Event::PreviousSelection => ("C-p", "Select the previous item"),
             Event::SwitchPane => ("Tab", "Navigate between entry types"),
             Event::TextEntry(_) => ("", ""),
+            Event::Export => (
+                "C-e",
+                "Export entry to html and open with the default browser",
+            ),
             // We never want to see this but have to define it
             Event::Invalid => ("invalid", "invalid"),
         };
