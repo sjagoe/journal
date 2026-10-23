@@ -2,7 +2,7 @@ use std::fmt;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Event {
     Select,
     New,

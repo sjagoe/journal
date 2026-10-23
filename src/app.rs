@@ -279,11 +279,6 @@ impl App {
                     self.text_entry = None;
                     return Ok(Redraw(true));
                 }
-                Event::Back | Event::BackOrExit => {
-                    self.mode = AppMode::Standard;
-                    self.text_entry = None;
-                    return Ok(Redraw(true));
-                }
                 Event::Home => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(KeyCode::Home);
@@ -317,7 +312,29 @@ impl App {
                         ]));
                     }
                 }
-                _ => {}
+                event => {
+                    let go_back = if *event == Event::Back {
+                        true
+                    } else if *event == Event::BackOrExit {
+                        if let Some(ref mut text_entry) = self.text_entry {
+                            if text_entry.is_empty() {
+                                true
+                            } else {
+                                text_entry.clear();
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if go_back {
+                        self.mode = AppMode::Standard;
+                        self.text_entry = None;
+                        return Ok(Redraw(true));
+                    }
+                }
             },
             AppMode::Error(_) => match event {
                 Event::Select | Event::Back | Event::BackOrExit => {
