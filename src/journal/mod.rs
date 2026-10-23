@@ -11,6 +11,8 @@ use time::OffsetDateTime;
 
 mod changes;
 
+use crate::errors::{ErrorKind, JournalError};
+
 use self::changes::LastChanged;
 
 #[derive(Clone, Debug)]
@@ -63,6 +65,15 @@ impl JournalSection {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn contains(&self, entry_name: &str) -> bool {
+        for entry in self.entries.iter() {
+            if entry.name == entry_name {
+                return true;
+            }
+        }
+        false
     }
 
     // pub fn is_empty(&self) -> bool {
@@ -145,7 +156,19 @@ impl Journal {
         }
     }
 
-    pub fn with_new_entry(&self, kind: &EntryKind, name: &str, repo: &Repository) -> Journal {
+    pub fn with_new_entry(
+        &self,
+        kind: &EntryKind,
+        name: &str,
+        repo: &Repository,
+    ) -> Result<Journal, JournalError> {
+        if match kind {
+            EntryKind::General => self.general.contains(name),
+            EntryKind::Narrative => self.narrative.contains(name),
+        } {
+            return Err(JournalError::Error(ErrorKind::EntryExists));
+        }
+
         let mut general: Vec<String> = self
             .general
             .entries
@@ -185,6 +208,6 @@ impl Journal {
 
         std::fs::rename(&tmp_location, &self.location).unwrap();
 
-        Journal::from_file(&self.location, repo)
+        Ok(Journal::from_file(&self.location, repo))
     }
 }

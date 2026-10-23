@@ -67,6 +67,7 @@ pub enum ErrorKind {
     FileWriteError,
     CommandParseError,
     EditingEntry,
+    EntryExists,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -95,6 +96,7 @@ impl ErrorKind {
             ErrorKind::CommandParseError => "Failed to parse command",
             ErrorKind::EditingEntry => "Failed to edit file",
             ErrorKind::NewEntry => "Failed to create new entry",
+            ErrorKind::EntryExists => "New entry is already tracked",
         }
     }
 

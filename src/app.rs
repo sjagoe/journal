@@ -195,7 +195,9 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.journal = self.journal.with_new_entry(kind, new_entry, &repo);
+        if let Some(journal) = self.journal.with_new_entry(kind, new_entry, &repo).ok() {
+            self.journal = journal;
+        }
 
         self.edit_entry(kind, new_entry).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
