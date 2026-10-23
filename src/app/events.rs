@@ -27,42 +27,77 @@ pub struct ActionInfo {
 
 impl From<KeyEvent> for Event {
     fn from(key: KeyEvent) -> Event {
-        match (key.code, key.modifiers.bits()) {
-            (KeyCode::Enter, 0) => Event::Select,
-            (KeyCode::Home, 0) => Event::Home,
-            (KeyCode::End, 0) => Event::End,
-            (KeyCode::PageUp, 0) => Event::PageUp,
-            (KeyCode::PageDown, 0) => Event::PageDown,
-            (KeyCode::Up, 0) => Event::PreviousSelection,
-            (KeyCode::Down, 0) => Event::NextSelection,
-            (KeyCode::Tab, 0) => Event::SwitchPane,
-            (
-                KeyCode::Char(_)
+        match key {
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Enter,
+                ..
+            } => Event::Select,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Home,
+                ..
+            } => Event::Home,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::End,
+                ..
+            } => Event::End,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::PageUp,
+                ..
+            } => Event::PageUp,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::PageDown,
+                ..
+            } => Event::PageDown,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Up,
+                ..
+            } => Event::PreviousSelection,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Down,
+                ..
+            } => Event::NextSelection,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Tab,
+                ..
+            } => Event::SwitchPane,
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Char(_)
                 | KeyCode::Backspace
                 | KeyCode::Delete
                 | KeyCode::Left
                 | KeyCode::Right,
-                0,
-            ) => Event::TextEntry(key.code),
-            (keycode, modifiers) => {
-                if modifiers == KeyModifiers::ALT.bits() {
-                    match keycode {
-                        KeyCode::Char('n') => Event::New,
-                        KeyCode::Char('v') => Event::PageUp,
-                        _ => Event::Invalid,
-                    }
-                } else if modifiers == KeyModifiers::CONTROL.bits() {
-                    match keycode {
-                        KeyCode::Char('g') => Event::Back,
-                        KeyCode::Char('n') => Event::NextSelection,
-                        KeyCode::Char('p') => Event::PreviousSelection,
-                        KeyCode::Char('v') => Event::PageDown,
-                        _ => Event::Invalid,
-                    }
-                } else {
-                    Event::Invalid
-                }
+                ..
+            } => Event::TextEntry(key.code),
+            KeyEvent {
+                modifiers: KeyModifiers::ALT,
+                code: KeyCode::Char(character),
+                ..
+            } => match character {
+                'n' => Event::New,
+                'v' => Event::PageUp,
+                _ => Event::Invalid,
             }
+            KeyEvent {
+                modifiers: KeyModifiers::CONTROL,
+                code: KeyCode::Char(character),
+                ..
+            } => match character {
+                'g' => Event::Back,
+                'n' => Event::NextSelection,
+                'p' => Event::PreviousSelection,
+                'v' => Event::PageDown,
+                _ => Event::Invalid,
+            }
+            _ => Event::Invalid,
         }
     }
 }
