@@ -132,13 +132,21 @@ impl Drawable for EntriesPane {
                 Style::default().fg(Color::Gray)
             };
 
+            let last_modified = match item.last_modified {
+                Some(last_modified) => match last_modified.format(TIME_FORMAT) {
+                    Ok(commit_time) => commit_time,
+                    _ => "unknown".to_string(),
+                },
+                _ => "unknown".to_string(),
+            };
+
             let line = Line::from(vec![
                 Span::styled(
                     format!("{} ", format_status(&item.status)),
                     style.add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
-                    format!("{:30}", item.last_modified),
+                    format!("{:30}", last_modified),
                     style.add_modifier(Modifier::DIM),
                 ),
                 Span::styled(&item.name, style),

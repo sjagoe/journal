@@ -3,21 +3,16 @@ use std::collections::HashMap;
 use git2::{ObjectType, Repository, Sort};
 
 use time::UtcOffset;
-use time::macros::format_description;
-use time::{Timestamp, format_description::StaticFormatDescription};
-
-static TIME_FORMAT: StaticFormatDescription = format_description!(
-    "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
-);
+use time::{OffsetDateTime, Timestamp};
 
 pub struct LastChanged {
     // Map of filename to last changed time
-    last_changed: HashMap<String, String>,
+    last_changed: HashMap<String, OffsetDateTime>,
 }
 
 impl LastChanged {
     pub fn new(repo: &Repository) -> LastChanged {
-        let mut last_changed: HashMap<String, String> = HashMap::new();
+        let mut last_changed: HashMap<String, OffsetDateTime> = HashMap::new();
 
         let mut walk = match repo.revwalk() {
             Ok(walk) => walk,
@@ -87,10 +82,7 @@ impl LastChanged {
                     };
 
                     let time = timestamp.to_offset(offset);
-
-                    if let Ok(commit_time) = time.format(TIME_FORMAT) {
-                        last_changed.insert(name.into(), commit_time);
-                    }
+                    last_changed.insert(name.into(), time);
                 }
             }
         }
@@ -98,7 +90,7 @@ impl LastChanged {
         LastChanged { last_changed }
     }
 
-    pub fn get(&self, filename: &String) -> Option<String> {
-        self.last_changed.get(filename).map(|time| time.to_string())
+    pub fn get(&self, filename: &String) -> Option<&OffsetDateTime> {
+        self.last_changed.get(filename)
     }
 }

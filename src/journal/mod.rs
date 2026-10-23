@@ -7,6 +7,7 @@ use std::{
 
 use git2::{Repository, Status};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 mod changes;
 
@@ -29,15 +30,19 @@ pub struct SerializedEntries {
 pub struct JournalEntry {
     pub name: String,
     pub status: Option<Status>,
-    pub last_modified: String,
+    pub last_modified: Option<OffsetDateTime>,
 }
 
 impl JournalEntry {
-    fn new(name: &str, status: Option<Status>, last_modified: &str) -> JournalEntry {
+    fn new(
+        name: &str,
+        status: Option<Status>,
+        last_modified: Option<OffsetDateTime>,
+    ) -> JournalEntry {
         JournalEntry {
             name: name.to_owned(),
-            status: status,
-            last_modified: last_modified.to_owned(),
+            status,
+            last_modified,
         }
     }
 }
@@ -87,14 +92,9 @@ fn to_entries(repo: &Repository, changes: &LastChanged, items: &[String]) -> Vec
         .map(|name| {
             let filename = format!("{}.age", name);
             let path = Path::new(&filename);
-            let status = match repo.status_file(path) {
-                Ok(status) => Some(status),
-                Err(_) => None,
-            };
-            match changes.get(&filename) {
-                Some(time) => JournalEntry::new(name, status, &time),
-                None => JournalEntry::new(name, status, "unknown"),
-            }
+            let status = repo.status_file(path).ok();
+            let time = changes.get(&filename).copied();
+            JournalEntry::new(name, status, time)
         })
         .collect()
 }
