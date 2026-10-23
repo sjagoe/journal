@@ -195,7 +195,7 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        if let Some(journal) = self.journal.with_new_entry(kind, new_entry, &repo).ok() {
+        if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
             self.journal = journal;
         }
 
