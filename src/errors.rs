@@ -50,15 +50,23 @@ impl JournalError {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     Chained(ChainedError),
+    Wrapped(String),
     Subprocess,
     TemporaryFile,
     TerminalInit,
     Decryption,
+    Encryption,
+    DecryptionPipeline,
+    DecryptionPassphrase,
     InvalidMode,
     NewEntry,
     GetCurrentTime,
     FormatDateTime,
     TextEntryFailed,
+    FileReadError,
+    FileWriteError,
+    CommandParseError,
+    EditingEntry,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -70,14 +78,22 @@ impl ErrorKind {
     pub fn description(&self) -> &str {
         match *self {
             ErrorKind::Chained(_) => "Multiple errors",
+            ErrorKind::Wrapped(_) => "Wrapped error",
             ErrorKind::Subprocess => "Failed to execute subprocess",
             ErrorKind::TemporaryFile => "Failed to write temporary file",
             ErrorKind::TerminalInit => "Failed to reinitialize terminal",
-            ErrorKind::Decryption => "Error decrypting entry",
+            ErrorKind::Decryption => "Failed to decrypt entry",
+            ErrorKind::Encryption => "Failed to encrypt entry",
             ErrorKind::InvalidMode => "App entered invalid state",
             ErrorKind::GetCurrentTime => "Unable to fetch system time in local timezone",
             ErrorKind::FormatDateTime => "Failed to format time to string",
             ErrorKind::TextEntryFailed => "Text entry failed",
+            ErrorKind::FileReadError => "Failed to read file",
+            ErrorKind::FileWriteError => "Failed to write file",
+            ErrorKind::DecryptionPipeline => "Failed to create decryption pipeline",
+            ErrorKind::DecryptionPassphrase => "Passphrases are not supported",
+            ErrorKind::CommandParseError => "Failed to parse command",
+            ErrorKind::EditingEntry => "Failed to edit file",
             ErrorKind::NewEntry => "Failed to create new entry",
         }
     }
@@ -94,11 +110,12 @@ impl ErrorKind {
                 let header = format!("{} ->\n", self.description());
                 message.push_str(&header);
                 for error in chained.errors.iter() {
-                    let submsg = format!("  {}\n", error.description());
+                    let submsg = format!("  {}\n", error.as_str());
                     message.push_str(&submsg);
                 }
                 message
             }
+            ErrorKind::Wrapped(value) => value.to_string(),
             _ => self.description().to_string(),
         }
     }

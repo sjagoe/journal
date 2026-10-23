@@ -44,13 +44,21 @@ fn get_age_decryptor<P: AsRef<Path>>(
     path: P,
 ) -> Result<RecipientsDecryptor<ArmoredReader<BufReader<InputReader>>>, JournalError> {
     let s = path.as_ref().to_str().map(std::string::ToString::to_string);
-    let input_reader =
-        InputReader::new(s).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
-    let decryptor = age::Decryptor::new(ArmoredReader::new(input_reader))
-        .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+    let input_reader = InputReader::new(s)
+        .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::FileReadError]))?;
+    let decryptor = age::Decryptor::new(ArmoredReader::new(input_reader)).map_err(|_| {
+        JournalError::chain(&[
+            ErrorKind::Decryption,
+            ErrorKind::FileReadError,
+            ErrorKind::DecryptionPipeline,
+        ])
+    })?;
 
     match decryptor {
-        age::Decryptor::Passphrase(_) => Err(JournalError::Error(ErrorKind::Decryption)),
+        age::Decryptor::Passphrase(_) => Err(JournalError::chain(&[
+            ErrorKind::Decryption,
+            ErrorKind::DecryptionPassphrase,
+        ])),
         age::Decryptor::Recipients(decryptor) => Ok(decryptor),
     }
 }
@@ -61,11 +69,12 @@ fn decrypt<P: AsRef<Path>>(
     identities: &[Box<dyn age::Identity>],
 ) -> Result<(), JournalError> {
     let output_file_mode: u32 = 0o600;
-    let decryptor =
-        get_age_decryptor(input_file).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+    let decryptor = get_age_decryptor(input_file)?;
     decryptor
         .decrypt(identities.iter().map(|i| i.as_ref() as &dyn age::Identity))
-        .map_err(|_| JournalError::Error(ErrorKind::Decryption))
+        .map_err(|e| {
+            JournalError::chain(&[ErrorKind::Decryption, ErrorKind::Wrapped(e.to_string())])
+        })
         .and_then(|mut plaintext_reader| {
             let output = output_file
                 .as_ref()
@@ -73,15 +82,24 @@ fn decrypt<P: AsRef<Path>>(
                 .map(std::string::ToString::to_string);
             let mut ciphertext_writer =
                 OutputWriter::new(output, true, OutputFormat::Unknown, output_file_mode, false)
-                    .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
-            io::copy(&mut plaintext_reader, &mut ciphertext_writer)
-                .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+                    .map_err(|_| {
+                        JournalError::chain(&[ErrorKind::Decryption, ErrorKind::FileWriteError])
+                    })?;
+            io::copy(&mut plaintext_reader, &mut ciphertext_writer).map_err(|_| {
+                JournalError::chain(&[ErrorKind::Decryption, ErrorKind::FileWriteError])
+            })?;
             Ok(())
         })
 }
 
 fn editor_from_string(editor: &str) -> Result<(String, Vec<String>), JournalError> {
-    let parts = split(editor).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+    let parts = split(editor).map_err(|_| {
+        JournalError::chain(&[
+            ErrorKind::Subprocess,
+            ErrorKind::CommandParseError,
+            ErrorKind::Wrapped("Could not parse editor string in config".to_string()),
+        ])
+    })?;
     let prog = &parts[0];
     let args = &parts[1..];
     Ok((prog.to_string(), args.to_vec()))
@@ -94,14 +112,22 @@ fn get_editor_command(
         Some(ref editor) => editor_from_string(editor),
         None => {
             if let Some(visual_env) = env::var_os("VISUAL") {
-                let pager = visual_env
-                    .into_string()
-                    .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+                let pager = visual_env.into_string().map_err(|_| {
+                    JournalError::chain(&[
+                        ErrorKind::Subprocess,
+                        ErrorKind::CommandParseError,
+                        ErrorKind::Wrapped("Could not parse VISUAL env var".to_string()),
+                    ])
+                })?;
                 editor_from_string(&pager)
             } else if let Some(editor_env) = env::var_os("EDITOR") {
-                let pager = editor_env
-                    .into_string()
-                    .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+                let pager = editor_env.into_string().map_err(|_| {
+                    JournalError::chain(&[
+                        ErrorKind::Subprocess,
+                        ErrorKind::CommandParseError,
+                        ErrorKind::Wrapped("Could not parse EDITOR env var".to_string()),
+                    ])
+                })?;
                 editor_from_string(&pager)
             } else {
                 let args: Vec<String> = vec![];
@@ -148,13 +174,14 @@ impl EntryEditor {
         text: Option<&str>,
     ) -> Result<(), JournalError> {
         let file = if let Some(path) = decrypted_path {
-            let stdin_file =
-                File::open(path).map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+            let stdin_file = File::open(path).map_err(|_| {
+                JournalError::chain(&[ErrorKind::Encryption, ErrorKind::FileReadError])
+            })?;
             Some(stdin_file)
         } else if text.is_some() {
             None
         } else {
-            return Err(JournalError::Error(ErrorKind::Subprocess));
+            panic!("encrypt() MUST have exactly one of decrypted_path or text passed")
         };
         let mut command = Command::new("ragenix");
         command
@@ -175,8 +202,12 @@ impl EntryEditor {
         } else if text.is_some() {
             command.stdin(Stdio::piped());
         } else {
-            return Err(JournalError::Error(ErrorKind::Subprocess));
+            panic!("This condition is already checked; we shouldn't get here")
         }
+        // JournalError::chain(&[
+        //     ErrorKind::Subprocess,
+        //     ErrorKind::Wrapped("Failed to execute ragenix to encrypt entry".to_string()),
+        // ])
 
         if let Ok(mut child) = command.spawn() {
             if let Some(stdin_text) = text {
@@ -186,21 +217,40 @@ impl EntryEditor {
                     .take()
                     .expect("child stdin should be retrievable");
                 std::thread::spawn(move || {
-                    let _ = stdin
-                        .write_all(subproc_stdin.as_bytes())
-                        .map_err(|_| JournalError::Error(ErrorKind::Subprocess));
+                    let _ = stdin.write_all(subproc_stdin.as_bytes()).map_err(|_| {
+                        JournalError::chain(&[
+                            ErrorKind::Encryption,
+                            ErrorKind::Subprocess,
+                            ErrorKind::FileWriteError,
+                            ErrorKind::Wrapped(
+                                "Failed to send data to ragenix to encrypt".to_string(),
+                            ),
+                        ])
+                    });
                 });
             }
             if let Ok(status) = child.wait() {
                 if !status.success() {
-                    println!("ragenix exited with code {:?}", status.code());
-                    return Err(JournalError::Error(ErrorKind::Subprocess));
+                    let message = format!("ragenix exited with code {:?}", status.code());
+                    return Err(JournalError::chain(&[
+                        ErrorKind::Encryption,
+                        ErrorKind::Subprocess,
+                        ErrorKind::Wrapped(message),
+                    ]));
                 }
             } else {
-                return Err(JournalError::Error(ErrorKind::Subprocess));
+                return Err(JournalError::chain(&[
+                    ErrorKind::Encryption,
+                    ErrorKind::Subprocess,
+                    ErrorKind::Wrapped("Failed to wait for ragenix to complete".to_string()),
+                ]));
             }
         } else {
-            return Err(JournalError::Error(ErrorKind::Subprocess));
+            return Err(JournalError::chain(&[
+                ErrorKind::Encryption,
+                ErrorKind::Subprocess,
+                ErrorKind::Wrapped("Failed to execute ragenix to encrypt entry".to_string()),
+            ]));
         }
         Ok(())
     }
@@ -215,37 +265,58 @@ impl EntryEditor {
         if let Ok(mut child) = command.spawn() {
             if let Ok(status) = child.wait() {
                 if !status.success() {
-                    println!("Editor exited with code {:?}", status.code());
-                    return Err(JournalError::Error(ErrorKind::Subprocess));
+                    let message = format!("Editor exited with code {:?}", status.code());
+                    return Err(JournalError::chain(&[
+                        ErrorKind::EditingEntry,
+                        ErrorKind::Subprocess,
+                        ErrorKind::Wrapped(message),
+                    ]));
                 }
             } else {
-                return Err(JournalError::Error(ErrorKind::Subprocess));
+                return Err(JournalError::chain(&[
+                    ErrorKind::EditingEntry,
+                    ErrorKind::Subprocess,
+                    ErrorKind::Wrapped("Failed to wait for editor to exit".to_string()),
+                ]));
             }
         } else {
-            return Err(JournalError::Error(ErrorKind::Subprocess));
+            return Err(JournalError::chain(&[
+                ErrorKind::EditingEntry,
+                ErrorKind::Subprocess,
+                ErrorKind::Wrapped("Failed to execute editor".to_string()),
+            ]));
         }
 
         Ok(())
     }
 
     fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
-        let dir = tempfile::tempdir().map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::Error(ErrorKind::TemporaryFile))?;
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         let identities = self.load_identities()?;
         let input_path = dir.path().join("input.org");
 
         decrypt(encrypted_file_path, &input_path.clone(), &identities)?;
 
-        let pre_edit_hash =
-            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let pre_edit_hash = sha256(&input_path).map_err(|_| {
+            JournalError::chain(&[
+                ErrorKind::EditingEntry,
+                ErrorKind::Wrapped("Failed to hash original content".to_string()),
+            ])
+        })?;
 
         self.spawn_editor(&input_path)?;
 
         // fixme: We don't want to discard changes in this case!
-        let post_edit_hash =
-            sha256(&input_path).map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let post_edit_hash = sha256(&input_path).map_err(|_| {
+            JournalError::chain(&[
+                ErrorKind::EditingEntry,
+                ErrorKind::Wrapped("Failed to hash new content".to_string()),
+            ])
+        })?;
 
         if pre_edit_hash == post_edit_hash {
             return Ok(false);
@@ -257,12 +328,12 @@ impl EntryEditor {
     }
 
     fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
-        let now =
-            OffsetDateTime::now_local().map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+        let now = OffsetDateTime::now_local()
+            .map_err(|_| JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime]))?;
 
         let now_org_str = now
             .format(ORG_DATE_FORMAT)
-            .map_err(|_| JournalError::Error(ErrorKind::Subprocess))?;
+            .map_err(|_| JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime]))?;
 
         let text = format!(
             "#+SETUPFILE: style.css.org
