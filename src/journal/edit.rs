@@ -2,35 +2,27 @@ use std::{
     env,
     ffi::OsStr,
     fs::{self, File},
-    io::{self, BufReader, Write},
-    os::unix::fs::{PermissionsExt, symlink},
+    io::{self, Write},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-};
-
-use age::{
-    armor::ArmoredReader,
-    cli_common::{
-        StdinGuard,
-        file_io::{InputReader, OutputFormat, OutputWriter},
-    },
-    decryptor::RecipientsDecryptor,
+    process::{Command, Stdio},
 };
 
 use color_eyre::Result;
 use digest_io::IoWrapper;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
-use tempfile::TempDir;
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 use crate::{
     config::Config,
     errors::{ErrorKind, JournalError},
-    journal::{EntryKind, entry_filename},
+    journal::{EntryKind, age::decrypt, entry_filename},
     tui,
 };
+
+use super::age::load_identities;
 
 static ORG_DATE_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]-[day] [weekday repr:short]");
@@ -40,46 +32,6 @@ pub(crate) fn sha256<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     let mut hasher = IoWrapper(Sha256::new());
     io::copy(&mut file, &mut hasher)?;
     Ok(hasher.0.finalize().to_vec())
-}
-
-fn get_age_decryptor<P: AsRef<Path>>(
-    path: P,
-) -> Result<RecipientsDecryptor<ArmoredReader<BufReader<InputReader>>>, JournalError> {
-    let s = path.as_ref().to_str().map(std::string::ToString::to_string);
-    let input_reader =
-        InputReader::new(s).map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
-    let decryptor = age::Decryptor::new(ArmoredReader::new(input_reader)).map_err(|_| {
-        JournalError::chain(&[ErrorKind::FileReadError, ErrorKind::DecryptionPipeline])
-    })?;
-
-    match decryptor {
-        age::Decryptor::Passphrase(_) => Err(JournalError::Error(ErrorKind::DecryptionPassphrase)),
-        age::Decryptor::Recipients(decryptor) => Ok(decryptor),
-    }
-}
-
-fn decrypt<P: AsRef<Path>>(
-    input_file: P,
-    output_file: P,
-    identities: &[Box<dyn age::Identity>],
-) -> Result<(), JournalError> {
-    let output_file_mode: u32 = 0o600;
-    let decryptor = get_age_decryptor(input_file)?;
-    decryptor
-        .decrypt(identities.iter().map(|i| i.as_ref() as &dyn age::Identity))
-        .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))
-        .and_then(|mut plaintext_reader| {
-            let output = output_file
-                .as_ref()
-                .to_str()
-                .map(std::string::ToString::to_string);
-            let mut ciphertext_writer =
-                OutputWriter::new(output, true, OutputFormat::Unknown, output_file_mode, false)
-                    .map_err(|_| JournalError::Error(ErrorKind::FileWriteError))?;
-            io::copy(&mut plaintext_reader, &mut ciphertext_writer)
-                .map_err(|_| JournalError::Error(ErrorKind::FileWriteError))?;
-            Ok(())
-        })
 }
 
 fn editor_from_string(editor: &str) -> Result<(String, Vec<String>), JournalError> {
@@ -128,8 +80,8 @@ fn get_editor_command(
 }
 
 pub struct EntryEditor {
-    identity: String,
-    journal_path: String,
+    pub(super) identity: String,
+    pub(super) journal_path: String,
     editor: String,
     editor_args: Vec<String>,
 }
@@ -146,15 +98,6 @@ impl EntryEditor {
             journal_path: config.journal_path.to_owned(),
         };
         Ok(entry_editor)
-    }
-
-    fn load_identities(&self) -> Result<Vec<Box<dyn age::Identity>>, JournalError> {
-        let mut stdin_guard = StdinGuard::new(true);
-        let identities =
-            age::cli_common::read_identities(vec![self.identity.clone()], None, &mut stdin_guard)
-                .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
-
-        Ok(identities)
     }
 
     fn encrypt<P: AsRef<Path>>(
@@ -274,7 +217,7 @@ impl EntryEditor {
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
-        let identities = self.load_identities()?;
+        let identities = load_identities(&self.identity)?;
         let input_path = dir.path().join("input.org");
 
         decrypt(encrypted_file_path, &input_path.clone(), &identities).map_err(
@@ -381,203 +324,5 @@ impl EntryEditor {
             return Err(e);
         }
         Ok(changed)
-    }
-}
-
-#[derive(Debug)]
-enum ExportProcess {
-    Export(Child),
-    Render(Child),
-}
-
-pub struct EntryExporter {
-    filename: String,
-    progress: f64,
-    entry_editor: EntryEditor,
-    dir: TempDir,
-    export_process: Option<ExportProcess>,
-}
-
-impl EntryExporter {
-    pub fn new(config: &Config, kind: &EntryKind, entry: &str) -> Result<Self, JournalError> {
-        let filename = entry_filename(kind, entry);
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-        let entry_editor = EntryEditor::new(config)?;
-        let exporter = Self {
-            filename,
-            progress: 0.0,
-            entry_editor,
-            dir,
-            export_process: None,
-        };
-        Ok(exporter)
-    }
-
-    fn check_progress(&mut self) -> Result<(), JournalError> {
-        if let Some(ref mut export_process) = self.export_process {
-            match export_process {
-                ExportProcess::Export(child) => {
-                    if let Ok(Some(status)) = child.try_wait() {
-                        if status.success() {
-                            self.export_process = None;
-                            self.spawn_browser(&self.exported_path())?;
-                        } else {
-                            let message = format!("Editor exited with code {:?}", status.code());
-                            return Err(JournalError::chain(&[
-                                ErrorKind::Subprocess,
-                                ErrorKind::Wrapped(message),
-                            ]));
-                        }
-                    }
-                }
-                ExportProcess::Render(child) => {
-                    if let Ok(Some(status)) = child.try_wait() {
-                        if status.success() {
-                            self.export_process = None;
-                        } else {
-                            let message = format!("Browser exited with code {:?}", status.code());
-                            return Err(JournalError::chain(&[
-                                ErrorKind::Subprocess,
-                                ErrorKind::Wrapped(message),
-                            ]));
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn tick(&mut self, tick_duration: u8) -> Result<bool, JournalError> {
-        self.check_progress()?;
-        let mut update_progress = |factor| {
-            if self.progress >= 1.0 {
-                true
-            } else {
-                let duration: f64 = tick_duration.into();
-                let new = self.progress + (duration / factor);
-                self.progress = new;
-                false
-            }
-        };
-        if let Some(ref export_process) = self.export_process {
-            match export_process {
-                ExportProcess::Export(_) => {
-                    // Just long progress bars .. we don't really have
-                    // anything to go on to monitor progress
-                    let _ = update_progress(10000.0);
-                    return Ok(false);
-                }
-                _ => {
-                    return Ok(update_progress(1000.0));
-                }
-            }
-        }
-        Ok(update_progress(1000.0))
-    }
-
-    pub fn get_progress(&self) -> f64 {
-        if self.progress >= 1.0 {
-            1.0
-        } else {
-            self.progress
-        }
-    }
-
-    fn spawn_browser(&mut self, exported_path: &PathBuf) -> Result<(), JournalError> {
-        let mut command = Command::new("xdg-open");
-        command.arg(exported_path);
-
-        if let Ok(child) = command.spawn() {
-            self.export_process = Some(ExportProcess::Render(child));
-        } else {
-            return Err(JournalError::chain(&[
-                ErrorKind::Subprocess,
-                ErrorKind::Wrapped("Failed to execute browser".to_string()),
-            ]));
-        }
-
-        Ok(())
-    }
-
-    fn spawn_exporter(&mut self, decrypted_path: &PathBuf) -> Result<(), JournalError> {
-        let mut command = Command::new("emacs");
-        command
-            .arg("-q")
-            .arg(decrypted_path)
-            .args([
-                "--batch",
-                "-f",
-                "org-mode",
-                "-f",
-                "org-html-export-to-html",
-                "--kill",
-            ])
-            .current_dir(self.dir.path())
-            .env("_JOURNAL_EMACS_EMBEDDED", "t");
-
-        if let Ok(child) = command.spawn() {
-            self.export_process = Some(ExportProcess::Export(child));
-        } else {
-            return Err(JournalError::chain(&[
-                ErrorKind::Subprocess,
-                ErrorKind::Wrapped("Failed to execute editor".to_string()),
-            ]));
-        }
-
-        Ok(())
-    }
-
-    fn decrypted_path(&self) -> PathBuf {
-        self.dir.path().join("input.org")
-    }
-
-    fn exported_path(&self) -> PathBuf {
-        self.decrypted_path().with_extension("html")
-    }
-
-    pub fn start_export(&mut self) -> Result<(), JournalError> {
-        let journal_path = &self.entry_editor.journal_path;
-
-        let mut encrypted_file_path = PathBuf::new();
-        encrypted_file_path.push(journal_path);
-        encrypted_file_path.push(&self.filename);
-
-        let mut style_path = PathBuf::new();
-        style_path.push(journal_path);
-        style_path.push("style.css.org");
-
-        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
-        let identities = self.entry_editor.load_identities()?;
-        let input_path = self.decrypted_path();
-
-        let target_style_path = self.dir.path().join("style.css.org");
-
-        decrypt(encrypted_file_path, input_path.clone(), &identities).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
-        })?;
-
-        symlink(&style_path, &target_style_path).map_err(|_| {
-            JournalError::chain(&[
-                ErrorKind::FileWriteError,
-                ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
-            ])
-        })?;
-
-        self.spawn_exporter(&input_path)?;
-
-        // let exported_path =
-
-        // self.spawn_browser(&exported_path)?;
-
-        // // FIXME this is terrible.
-        // // We need to background this and wait for it to complete
-        // // The sleep for firefox to read the file before we delete it is also not great...
-        // std::thread::sleep(std::time::Duration::from_millis(500));
-
-        Ok(())
     }
 }

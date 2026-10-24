@@ -9,7 +9,10 @@ use git2::{Repository, Status};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
+mod age;
 mod changes;
+pub(crate) mod edit;
+pub(crate) mod export;
 
 use crate::errors::{ErrorKind, JournalError};
 

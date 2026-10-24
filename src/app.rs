@@ -1,5 +1,4 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use entry_editor::{EntryEditor, EntryExporter};
 use git2::Repository;
 use ratatui::{
     Frame,
@@ -15,15 +14,16 @@ use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 mod entries_page;
-mod entry_editor;
 mod pagination;
 
-use crate::app::entries_page::ActivePane;
-use crate::errors::{ErrorKind, JournalError};
-use crate::journal::EntryKind;
-use crate::traits::{Drawable, Navigable};
-use crate::{app::entries_page::EntriesPage, journal::Journal};
-use crate::{config::Config, ui::centered_rect};
+use crate::{
+    app::entries_page::{ActivePane, EntriesPage},
+    config::Config,
+    errors::{ErrorKind, JournalError},
+    journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter},
+    traits::{Drawable, Navigable},
+    ui::centered_rect,
+};
 
 pub struct Redraw(pub bool);
 
@@ -431,21 +431,22 @@ impl App {
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<Redraw, JournalError> {
         if let AppMode::ExportEntry = self.mode
-            && let Some(ref mut exporter) = self.entry_exporter {
-                match exporter.tick(tick_duration) {
-                    Ok(export_complete) => {
-                        if export_complete {
-                            self.mode = AppMode::Standard;
-                            self.entry_exporter = None;
-                        }
-                    }
-                    Err(e) => {
+            && let Some(ref mut exporter) = self.entry_exporter
+        {
+            match exporter.tick(tick_duration) {
+                Ok(export_complete) => {
+                    if export_complete {
                         self.mode = AppMode::Standard;
                         self.entry_exporter = None;
-                        return Err(e);
                     }
                 }
+                Err(e) => {
+                    self.mode = AppMode::Standard;
+                    self.entry_exporter = None;
+                    return Err(e);
+                }
             }
+        }
         Ok(Redraw(false))
     }
 

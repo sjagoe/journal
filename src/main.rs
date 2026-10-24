@@ -1,5 +1,5 @@
-use std::{fs::File, time::Duration};
 use std::io::BufReader;
+use std::{fs::File, time::Duration};
 
 use color_eyre::Result;
 use dirs::config_dir;
