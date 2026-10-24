@@ -8,10 +8,26 @@ use ratatui::{
 
 mod entries_pane;
 
-use crate::traits::{Drawable, Navigable};
-use crate::{app::entries_page::entries_pane::EntriesPane, journal::Journal};
+use crate::{
+    app::entries_page::entries_pane::EntriesPane,
+    journal::{EntryKind, Journal},
+    traits::{Drawable, Navigable},
+};
 
-pub use crate::app::entries_page::entries_pane::ActivePane;
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum ActivePane {
+    General,
+    Narrative,
+}
+
+impl From<&ActivePane> for EntryKind {
+    fn from(val: &ActivePane) -> Self {
+        match val {
+            ActivePane::General => EntryKind::General,
+            ActivePane::Narrative => EntryKind::Narrative,
+        }
+    }
+}
 
 pub struct EntriesPage {
     general_pane: EntriesPane,

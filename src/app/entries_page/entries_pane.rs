@@ -11,10 +11,11 @@ use ratatui::{
 use time::format_description::StaticFormatDescription;
 use time::macros::format_description;
 
-use crate::traits::{Drawable, Navigable};
+use super::ActivePane;
 use crate::{
     app::pagination::pagination,
-    journal::{EntryKind, Journal},
+    journal::Journal,
+    traits::{Drawable, Navigable},
 };
 
 #[allow(unused)]
@@ -52,22 +53,7 @@ fn format_status(status: &Option<Status>) -> String {
     format!("{}{}", index, wt)
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum ActivePane {
-    General,
-    Narrative,
-}
-
-impl From<&ActivePane> for EntryKind {
-    fn from(val: &ActivePane) -> Self {
-        match val {
-            ActivePane::General => EntryKind::General,
-            ActivePane::Narrative => EntryKind::Narrative,
-        }
-    }
-}
-
-pub struct EntriesPane {
+pub(super) struct EntriesPane {
     count: usize,
     selected_index: usize,
     active: bool,
@@ -75,7 +61,11 @@ pub struct EntriesPane {
 }
 
 impl EntriesPane {
-    pub fn new(journal: &Journal, pane_kind: ActivePane, active_pane: &ActivePane) -> EntriesPane {
+    pub(super) fn new(
+        journal: &Journal,
+        pane_kind: ActivePane,
+        active_pane: &ActivePane,
+    ) -> EntriesPane {
         let section = journal.section(&(&pane_kind).into());
         EntriesPane {
             count: section.len(),
@@ -85,15 +75,15 @@ impl EntriesPane {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         self.count
     }
 
-    pub fn activate(&mut self, active_pane: &ActivePane) {
+    pub(super) fn activate(&mut self, active_pane: &ActivePane) {
         self.active = active_pane == &self.pane_kind;
     }
 
-    pub fn update(&mut self, journal: &Journal) {
+    pub(super) fn update(&mut self, journal: &Journal) {
         let section = journal.section(&(&self.pane_kind).into());
         self.count = section.len();
         if self.selected_index > self.count - 1 {
