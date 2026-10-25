@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use git2::Repository;
+use git2::{ErrorCode, Repository};
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
@@ -27,6 +27,8 @@ use crate::{
 
 pub struct Redraw(pub bool);
 
+pub struct EventHandled(pub bool);
+
 static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]");
 
@@ -47,6 +49,7 @@ enum AppMode {
     Standard,
     NewEntry,
     ExportEntry,
+    Commit,
     Error(JournalError),
 }
 
@@ -305,6 +308,56 @@ impl App {
         Ok(())
     }
 
+    fn git_commit(&self, message: &str) -> Result<(), JournalError> {
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        let mut index = repo
+            .index()
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        let parent_commit = match repo.revparse_single("HEAD") {
+            Ok(obj) => Some(obj.into_commit().unwrap()),
+            // First commit so no parent commit
+            Err(e) if e.code() == ErrorCode::NotFound => None,
+            Err(e) => return Err(JournalError::Error(ErrorKind::Wrapped(e.to_string()))),
+        };
+
+        let mut parents = Vec::new();
+        if let Some(ref parent) = parent_commit {
+            parents.push(parent);
+        }
+
+        let signature = repo
+            .signature()
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        let commit_oid = repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                message,
+                &tree,
+                &parents[..],
+            )
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        let _commit = repo
+            .find_commit(commit_oid)
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        Ok(())
+    }
+
     fn handle_standard_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
         match event {
@@ -385,6 +438,13 @@ impl App {
                         self.git_add_entry(&entry_kind, &entry)?;
                     }
                 }
+                KeyCode::Char('c') => {
+                    let text_entry = ratin::InputField::new()
+                        .with_placeholder("Commit message ...")
+                        .with_max_length(120);
+                    self.text_entry = Some(text_entry);
+                    self.mode = AppMode::Commit;
+                }
                 _ => {}
             },
             _ => {}
@@ -392,35 +452,28 @@ impl App {
         Ok(Redraw(false))
     }
 
-    fn handle_new_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+    fn get_entered_text(&mut self) -> Result<String, JournalError> {
+        if let Some(ref mut text_entry) = self.text_entry {
+            Ok(text_entry.get_text().to_owned())
+        } else {
+            Err(JournalError::Error(ErrorKind::TextEntryFailed))
+        }
+    }
+
+    fn handle_text_entry_event(
+        &mut self,
+        event: &KeyEvent,
+    ) -> Result<(EventHandled, Redraw), JournalError> {
         match event {
             KeyEvent {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => match event.code {
-                KeyCode::Enter => {
-                    let err = || {
-                        Err(JournalError::chain(&[
-                            ErrorKind::InvalidMode,
-                            ErrorKind::NewEntry,
-                            ErrorKind::TextEntryFailed,
-                        ]))
-                    };
-                    self.mode = AppMode::Standard;
-                    let entry_name = if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.get_text().to_owned()
-                    } else {
-                        return err();
-                    };
-                    // fixme need actial validation
-                    if entry_name.is_empty() {
-                        return err();
-                    }
-                    self.new_entry(&EntryKind::Narrative, &entry_name)?;
-                    self.text_entry = None;
-                    return Ok(Redraw(true));
-                }
-                KeyCode::Home | KeyCode::End | KeyCode::Char(_) => {
+                KeyCode::Home
+                | KeyCode::End
+                | KeyCode::Delete
+                | KeyCode::Backspace
+                | KeyCode::Char(_) => {
                     if let Some(ref mut text_entry) = self.text_entry {
                         text_entry.handle_key(event.code);
                     } else {
@@ -430,6 +483,7 @@ impl App {
                             ErrorKind::TextEntryFailed,
                         ]));
                     }
+                    return Ok((EventHandled(true), Redraw(false)));
                 }
                 _ => {}
             },
@@ -456,10 +510,74 @@ impl App {
                 if go_back {
                     self.mode = AppMode::Standard;
                     self.text_entry = None;
-                    return Ok(Redraw(true));
+                    return Ok((EventHandled(true), Redraw(true)));
                 }
             }
             _ => {}
+        }
+        Ok((EventHandled(false), Redraw(false)))
+    }
+
+    fn handle_commit_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+        if let KeyEvent {
+            modifiers: KeyModifiers::NONE,
+            ..
+        } = event
+            && event.code == KeyCode::Enter
+        {
+            let err = || {
+                Err(JournalError::chain(&[
+                    ErrorKind::InvalidMode,
+                    // ErrorKind::Commit,
+                    ErrorKind::TextEntryFailed,
+                ]))
+            };
+            self.mode = AppMode::Standard;
+            let commit_message = self.get_entered_text().map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[
+                    ErrorKind::InvalidMode,
+                    // ErrorKind::Commit,
+                    e,
+                ]),
+            })?;
+            // fixme need actial validation
+            if commit_message.is_empty() {
+                return err();
+            }
+            self.git_commit(&commit_message)?;
+            self.text_entry = None;
+            return Ok(Redraw(true));
+        }
+        Ok(Redraw(false))
+    }
+
+    fn handle_new_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+        if let KeyEvent {
+            modifiers: KeyModifiers::NONE,
+            ..
+        } = event
+            && event.code == KeyCode::Enter
+        {
+            let err = || {
+                Err(JournalError::chain(&[
+                    ErrorKind::InvalidMode,
+                    ErrorKind::NewEntry,
+                    ErrorKind::TextEntryFailed,
+                ]))
+            };
+            self.mode = AppMode::Standard;
+            let entry_name = self.get_entered_text().map_err(|err| match err {
+                JournalError::Error(e) => {
+                    JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntry, e])
+                }
+            })?;
+            // fixme need actial validation
+            if entry_name.is_empty() {
+                return err();
+            }
+            self.new_entry(&EntryKind::Narrative, &entry_name)?;
+            self.text_entry = None;
+            return Ok(Redraw(true));
         }
         Ok(Redraw(false))
     }
@@ -470,7 +588,18 @@ impl App {
                 return self.handle_standard_mode_event(event);
             }
             AppMode::NewEntry => {
-                return self.handle_new_mode_event(event);
+                let (handled, redraw) = self.handle_text_entry_event(event)?;
+                if !handled.0 {
+                    return self.handle_new_mode_event(event);
+                }
+                return Ok(redraw);
+            }
+            AppMode::Commit => {
+                let (handled, redraw) = self.handle_text_entry_event(event)?;
+                if !handled.0 {
+                    return self.handle_commit_mode_event(event);
+                }
+                return Ok(redraw);
             }
             AppMode::ExportEntry => {}
             AppMode::Error(_) => match event {
