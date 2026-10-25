@@ -85,7 +85,10 @@
           };
         in
           {
-            packages.default = journal;
+            packages = {
+              default = journal;
+              inherit journal;
+            };
 
             devShells.default = craneLib.devShell {
               # Additional dev-shell environment variables can be set directly
