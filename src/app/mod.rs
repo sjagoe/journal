@@ -176,7 +176,7 @@ impl App {
 
         match self.mode {
             AppMode::Error(ref error) => self.display_error(frame, error),
-            AppMode::NewEntry => self.draw_text_input(frame),
+            AppMode::NewEntry | AppMode::Commit => self.draw_text_input(frame),
             AppMode::ExportEntry => self.draw_export_progress(frame),
             _ => {}
         }
