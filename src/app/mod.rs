@@ -291,6 +291,17 @@ impl App {
         Ok(())
     }
 
+    fn refresh(&mut self) -> Result<(), JournalError> {
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        self.set_journal(Journal::from_file(&self.config.entries_path(), &repo));
+
+        Ok(())
+    }
+
     fn git_index_entry(&mut self, action: &dyn Fn(&Journal, &Repository) -> Result<(), JournalError>) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
@@ -482,6 +493,11 @@ impl App {
                 KeyCode::Down => page.next_selection(),
                 KeyCode::Up => page.previous_selection(),
                 KeyCode::Tab => page.switch_pane(),
+                // Pressing g wil refresh the view from repository
+                KeyCode::Char('g') => {
+                    self.refresh()?;
+                    return Ok(Redraw(true));
+                }
                 _ => {}
             },
             _ => {}
