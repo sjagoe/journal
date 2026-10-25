@@ -23,34 +23,64 @@ static TIME_FORMAT: StaticFormatDescription = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]+[offset_hour]:[offset_minute]"
 );
 
-fn format_status(status: &Option<Status>) -> String {
-    let mut index = "?";
-    let mut wt = "?";
+fn format_status(status: &Option<Status>) -> Line<'_> {
+    let style = Style::default().fg(Color::Gray);
 
-    if let Some(status) = status {
-        index = " ";
-        wt = " ";
-        if status.is_index_deleted() {
-            index = "D";
+    let status_line = if let Some(status) = status {
+        let index = if status.is_index_deleted() {
+            "D"
         } else if status.is_index_modified() || status.is_index_typechange() {
-            index = "M";
+            "M"
         } else if status.is_index_new() {
-            index = "A";
+            "A"
         } else if status.is_index_renamed() {
-            index = "R";
-        }
-        if status.is_wt_deleted() {
-            wt = "D";
+            "R"
+        } else {
+            " "
+        };
+        let wt = if status.is_wt_deleted() {
+            "D"
         } else if status.is_wt_modified() || status.is_wt_typechange() {
-            wt = "M";
+            "M"
         } else if status.is_wt_new() {
-            wt = "?";
+            "?"
         } else if status.is_wt_renamed() {
-            wt = "R";
-        }
+            "R"
+        } else {
+            " "
+        };
+
+        Line::from(vec![
+            Span::styled(
+                index,
+                style.fg(Color::Green),
+            ),
+            Span::styled(
+                wt,
+                style.fg(Color::Red),
+            ),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(
+                "?",
+                style.add_modifier(Modifier::DIM),
+            ),
+            Span::styled(
+                "?",
+                style.add_modifier(Modifier::DIM),
+            ),
+        ])
     };
 
-    format!("{}{}", index, wt)
+    // format!("{}{}", index, wt);
+
+                // Span::styled(
+                //     format!("{} ", format_status(&item.status)),
+                //     style.add_modifier(Modifier::DIM),
+                // ),
+
+    status_line + Span::raw(" ")
 }
 
 pub(super) struct EntriesPane {
@@ -130,17 +160,13 @@ impl Drawable for EntriesPane {
                 _ => "unknown".to_string(),
             };
 
-            let line = Line::from(vec![
-                Span::styled(
-                    format!("{} ", format_status(&item.status)),
-                    style.add_modifier(Modifier::DIM),
-                ),
+            let line = format_status(&item.status) +
                 Span::styled(
                     format!("{:30}", last_modified),
                     style.add_modifier(Modifier::DIM),
-                ),
-                Span::styled(&item.name, style),
-            ]);
+                ) +
+                Span::styled(&item.name, style);
+
             list_items.push(ListItem::new(line));
         }
 
