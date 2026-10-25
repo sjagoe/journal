@@ -225,6 +225,9 @@ impl App {
 
         if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
             self.journal = journal;
+            let _ = self.journal.git_add(&repo, &self.config.entries_filename()).map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
+            });
         }
 
         self.edit_entry(kind, new_entry).map_err(|err| match err {

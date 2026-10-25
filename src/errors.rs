@@ -70,6 +70,8 @@ pub enum ErrorKind {
     ExportingEntry,
     EntryExists,
     AppExit,
+    GitError,
+    GitIndexError,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -101,6 +103,8 @@ impl ErrorKind {
             ErrorKind::NewEntry => "Failed to create new entry",
             ErrorKind::EntryExists => "New entry is already tracked",
             ErrorKind::AppExit => "Normal application exit",
+            ErrorKind::GitError => "Error performing git action",
+            ErrorKind::GitIndexError => "Failed to reference the git index",
         }
     }
 

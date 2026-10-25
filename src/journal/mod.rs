@@ -208,4 +208,30 @@ impl Journal {
 
         Ok(Journal::from_file(&self.location, repo))
     }
+
+    pub fn git_add(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
+        let mut filepath = PathBuf::new();
+        filepath.push(filename);
+        match repo.index() {
+            Ok(mut index) => {
+                if let Some(err) = index.add_path(&filepath).err() {
+                    return Err(JournalError::chain(&[
+                        ErrorKind::GitIndexError,
+                        ErrorKind::Wrapped(err.to_string()),
+                    ]));
+                }
+                if let Some(err) = index.write().err() {
+                    return Err(JournalError::chain(&[
+                        ErrorKind::GitIndexError,
+                        ErrorKind::Wrapped(err.to_string()),
+                    ]));
+                }
+                Ok(())
+            }
+            Err(err) => Err(JournalError::chain(&[
+                ErrorKind::GitIndexError,
+                ErrorKind::Wrapped(err.to_string()),
+            ])),
+        }
+    }
 }

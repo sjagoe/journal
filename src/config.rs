@@ -10,10 +10,14 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn entries_filename(&self) -> &str {
+        "entries.json"
+    }
+
     pub fn entries_path(&self) -> PathBuf {
         let mut path = PathBuf::new();
         path.push(&self.journal_path);
-        path.push("entries.json");
+        path.push(&self.entries_filename());
         path
     }
 }
