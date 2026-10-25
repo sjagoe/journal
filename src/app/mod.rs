@@ -464,29 +464,38 @@ impl App {
         &mut self,
         event: &KeyEvent,
     ) -> Result<(EventHandled, Redraw), JournalError> {
+        let mut send_text_entry = || -> Result<(EventHandled, Redraw), JournalError> {
+            if let Some(ref mut text_entry) = self.text_entry {
+                text_entry.handle_key(event.code);
+            } else {
+                return Err(JournalError::chain(&[
+                    ErrorKind::InvalidMode,
+                    ErrorKind::NewEntry,
+                    ErrorKind::TextEntryFailed,
+                ]));
+            }
+            Ok((EventHandled(true), Redraw(false)))
+        };
         match event {
             KeyEvent {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => match event.code {
                 KeyCode::Home
-                | KeyCode::End
-                | KeyCode::Delete
-                | KeyCode::Backspace
-                | KeyCode::Char(_) => {
-                    if let Some(ref mut text_entry) = self.text_entry {
-                        text_entry.handle_key(event.code);
-                    } else {
-                        return Err(JournalError::chain(&[
-                            ErrorKind::InvalidMode,
-                            ErrorKind::NewEntry,
-                            ErrorKind::TextEntryFailed,
-                        ]));
-                    }
-                    return Ok((EventHandled(true), Redraw(false)));
+                    | KeyCode::End
+                    | KeyCode::Delete
+                    | KeyCode::Backspace
+                    | KeyCode::Char(_) => {
+                    return send_text_entry();
                 }
                 _ => {}
             },
+            KeyEvent {
+                modifiers: KeyModifiers::SHIFT,
+                ..
+            } => if let KeyCode::Char(_) = event.code {
+                return send_text_entry();
+            }
             KeyEvent {
                 modifiers: KeyModifiers::CONTROL,
                 ..
