@@ -317,6 +317,16 @@ impl App {
         Ok(())
     }
 
+    fn git_remove_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let action = |journal: &Journal, repo: &Repository| {
+            journal.git_index_remove_entry(&repo, kind, entry)
+        };
+
+        self.git_index_entry(&action)?;
+
+        Ok(())
+    }
+
     fn git_commit(&mut self, message: &str) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
@@ -435,6 +445,13 @@ impl App {
                     if let Some(entry) = page.select(&self.journal) {
                         let entry_kind = EntryKind::from(&self.entries_page.active_pane);
                         self.git_add_entry(&entry_kind, &entry)?;
+                    }
+                }
+                // M-u for unstage file to index
+                KeyCode::Char('u') => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.git_remove_entry(&entry_kind, &entry)?;
                     }
                 }
                 // M-c for commit staged changes

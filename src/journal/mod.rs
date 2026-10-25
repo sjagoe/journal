@@ -239,6 +239,13 @@ impl Journal {
         }
     }
 
+    pub fn git_index_remove(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
+        let action = |index: &mut Index, filepath: &PathBuf| -> Result<(), git2::Error> {
+            index.remove_path(filepath)
+        };
+        self.git_index(repo, filename, &action)
+    }
+
     pub fn git_index_add(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
         let action = |index: &mut Index, filepath: &PathBuf| -> Result<(), git2::Error> {
             index.add_path(filepath)
@@ -249,5 +256,10 @@ impl Journal {
     pub fn git_index_add_entry(&self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
         self.git_index_add(repo, &filename)
+    }
+
+    pub fn git_index_remove_entry(&self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let filename = entry_filename(kind, entry);
+        self.git_index_remove(repo, &filename)
     }
 }
