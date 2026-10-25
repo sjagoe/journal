@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use git2::{Repository, Status};
+use git2::{Index, Repository, Status};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -213,12 +213,12 @@ impl Journal {
         Ok(Journal::from_file(&self.location, repo))
     }
 
-    pub fn git_add(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
+    fn git_index(&self, repo: &Repository, filename: &str, action: &dyn Fn(&mut Index, &PathBuf) -> Result<(), git2::Error>) -> Result<(), JournalError> {
         let mut filepath = PathBuf::new();
         filepath.push(filename);
         match repo.index() {
             Ok(mut index) => {
-                if let Some(err) = index.add_path(&filepath).err() {
+                if let Some(err) = action(&mut index, &filepath).err() {
                     return Err(JournalError::chain(&[
                         ErrorKind::GitIndexError,
                         ErrorKind::Wrapped(err.to_string()),
@@ -239,8 +239,15 @@ impl Journal {
         }
     }
 
-    pub fn git_add_entry(&self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    pub fn git_index_add(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
+        let action = |index: &mut Index, filepath: &PathBuf| -> Result<(), git2::Error> {
+            index.add_path(filepath)
+        };
+        self.git_index(repo, filename, &action)
+    }
+
+    pub fn git_index_add_entry(&self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
-        self.git_add(repo, &filename)
+        self.git_index_add(repo, &filename)
     }
 }

@@ -231,7 +231,7 @@ impl App {
             self.journal = journal;
             let _ = self
                 .journal
-                .git_add(&repo, self.config.entries_filename())
+                .git_index_add(&repo, self.config.entries_filename())
                 .map_err(|err| match err {
                     JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
                 });
@@ -247,7 +247,7 @@ impl App {
 
         if created {
             self.journal
-                .git_add_entry(&repo, kind, new_entry)
+                .git_index_add_entry(&repo, kind, new_entry)
                 .map_err(|err| match err {
                     JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
                 })?;
@@ -291,19 +291,28 @@ impl App {
         Ok(())
     }
 
-    fn git_add_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    fn git_index_entry(&mut self, action: &dyn Fn(&Journal, &Repository) -> Result<(), JournalError>) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.journal
-            .git_add_entry(&repo, kind, entry)
+        action(&self.journal, &repo)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
             })?;
 
         self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+
+        Ok(())
+    }
+
+    fn git_add_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let action = |journal: &Journal, repo: &Repository| {
+            journal.git_index_add_entry(&repo, kind, entry)
+        };
+
+        self.git_index_entry(&action)?;
 
         Ok(())
     }
