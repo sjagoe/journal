@@ -367,9 +367,11 @@ impl App {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             } => match event.code {
+                // C-x -> Exit
                 KeyCode::Char('x') => {
                     return Err(JournalError::Error(ErrorKind::AppExit));
                 }
+                // C-e -> Export
                 KeyCode::Char('e') => {
                     if let Some(entry) = page.select(&self.journal) {
                         let entry_kind = EntryKind::from(&self.entries_page.active_pane);
@@ -380,8 +382,11 @@ impl App {
                         return Ok(Redraw(false));
                     }
                 }
+                // C-n -> Next item
                 KeyCode::Char('n') => page.next_selection(),
+                // C-p -> Previous item
                 KeyCode::Char('p') => page.previous_selection(),
+                // C-v -> PgDn
                 KeyCode::Char('v') => page.pagedown(self.height),
                 _ => {}
             },
@@ -389,7 +394,9 @@ impl App {
                 modifiers: KeyModifiers::ALT,
                 ..
             } => match event.code {
+                // M-v -> PgUp
                 KeyCode::Char('v') => page.pageup(self.height),
+                // M-n -> New Entry
                 KeyCode::Char('n') => {
                     let now = OffsetDateTime::now_local().map_err(|_| {
                         JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
@@ -414,6 +421,21 @@ impl App {
                     }
                     return Ok(Redraw(true));
                 }
+                // M-s for stage file to index
+                KeyCode::Char('s') => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.git_add_entry(&entry_kind, &entry)?;
+                    }
+                }
+                // M-c for commit staged changes
+                KeyCode::Char('c') => {
+                    let text_entry = ratin::InputField::new()
+                        .with_placeholder("Commit message ...")
+                        .with_max_length(120);
+                    self.text_entry = Some(text_entry);
+                    self.mode = AppMode::Commit;
+                }
                 _ => {}
             },
             KeyEvent {
@@ -434,19 +456,6 @@ impl App {
                 KeyCode::Down => page.next_selection(),
                 KeyCode::Up => page.previous_selection(),
                 KeyCode::Tab => page.switch_pane(),
-                KeyCode::Char('a') => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.git_add_entry(&entry_kind, &entry)?;
-                    }
-                }
-                KeyCode::Char('c') => {
-                    let text_entry = ratin::InputField::new()
-                        .with_placeholder("Commit message ...")
-                        .with_max_length(120);
-                    self.text_entry = Some(text_entry);
-                    self.mode = AppMode::Commit;
-                }
                 _ => {}
             },
             _ => {}
