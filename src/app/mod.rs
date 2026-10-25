@@ -214,11 +214,14 @@ impl App {
             return Ok(file_changed);
         }
 
-        self.journal = Journal::from_file(&self.config.entries_path(), repo);
-
-        self.entries_page.update(&self.journal);
+        self.refresh_from_repo(repo);
 
         Ok(file_changed)
+    }
+
+    fn set_journal(&mut self, journal: Journal) {
+        self.journal = journal;
+        self.entries_page.update(&self.journal);
     }
 
     fn new_entry(&mut self, kind: &EntryKind, new_entry: &str) -> Result<(), JournalError> {
@@ -228,7 +231,7 @@ impl App {
         };
 
         if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
-            self.journal = journal;
+            self.set_journal(journal);
             let _ = self
                 .journal
                 .git_index_add(&repo, self.config.entries_filename())
@@ -262,7 +265,7 @@ impl App {
         if !changed {
             // Handle when the changed file was not re-read on edit,
             // because we created it but didn't edit afterwards.
-            self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+            self.refresh_from_repo(&repo);
         }
 
         Ok(())
@@ -291,13 +294,17 @@ impl App {
         Ok(())
     }
 
+    fn refresh_from_repo(&mut self, repo: &Repository) {
+        self.set_journal(Journal::from_file(&self.config.entries_path(), repo));
+    }
+
     fn refresh(&mut self) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.set_journal(Journal::from_file(&self.config.entries_path(), &repo));
+        self.refresh_from_repo(&repo);
 
         Ok(())
     }
@@ -313,14 +320,14 @@ impl App {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
             })?;
 
-        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+        self.refresh_from_repo(&repo);
 
         Ok(())
     }
 
     fn git_add_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let action = |journal: &Journal, repo: &Repository| {
-            journal.git_index_add_entry(&repo, kind, entry)
+            journal.git_index_add_entry(repo, kind, entry)
         };
 
         self.git_index_entry(&action)?;
@@ -330,7 +337,7 @@ impl App {
 
     fn git_remove_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let action = |journal: &Journal, repo: &Repository| {
-            journal.git_index_remove_entry(&repo, kind, entry)
+            journal.git_index_remove_entry(repo, kind, entry)
         };
 
         self.git_index_entry(&action)?;
@@ -385,7 +392,7 @@ impl App {
             .find_commit(commit_oid)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
-        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+        self.refresh_from_repo(&repo);
 
         Ok(())
     }
