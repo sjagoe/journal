@@ -65,7 +65,7 @@ impl JournalSection {
         changes: &LastChanged,
         items: &[String],
     ) -> JournalSection {
-        let entries = items
+        let mut entries: Vec<JournalEntry> = items
             .iter()
             .map(|name| {
                 let filename = entry_filename(&kind, name);
@@ -75,6 +75,7 @@ impl JournalSection {
                 JournalEntry::new(name, status, time)
             })
             .collect();
+        entries.sort_by(|a, b| b.name.cmp(&a.name));
 
         JournalSection {
             _kind: kind,
