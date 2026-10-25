@@ -308,7 +308,7 @@ impl App {
         Ok(())
     }
 
-    fn git_commit(&self, message: &str) -> Result<(), JournalError> {
+    fn git_commit(&mut self, message: &str) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
@@ -354,6 +354,8 @@ impl App {
         let _commit = repo
             .find_commit(commit_oid)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
 
         Ok(())
     }
