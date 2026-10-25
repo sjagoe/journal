@@ -234,4 +234,9 @@ impl Journal {
             ])),
         }
     }
+
+    pub fn git_add_entry(&self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let filename = entry_filename(kind, entry);
+        self.git_add(repo, &filename)
+    }
 }

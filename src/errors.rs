@@ -72,6 +72,7 @@ pub enum ErrorKind {
     AppExit,
     GitError,
     GitIndexError,
+    FileMissingError,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -105,6 +106,7 @@ impl ErrorKind {
             ErrorKind::AppExit => "Normal application exit",
             ErrorKind::GitError => "Error performing git action",
             ErrorKind::GitIndexError => "Failed to reference the git index",
+            ErrorKind::FileMissingError => "File to be edited does not exist,",
         }
     }
 

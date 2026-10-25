@@ -282,6 +282,14 @@ impl EntryEditor {
     }
 
     fn create_or_edit_entry(&self, filename: &str) -> Result<bool, JournalError> {
+        let mut encrypted_file_path = PathBuf::new();
+        encrypted_file_path.push(&self.journal_path);
+        encrypted_file_path.push(filename);
+
+        if !encrypted_file_path.exists() {
+            return Err(JournalError::Error(ErrorKind::FileMissingError));
+        }
+
         let display_editor = if self.editor_args.is_empty() {
             self.editor.to_string()
         } else {
@@ -290,22 +298,11 @@ impl EntryEditor {
 
         eprintln!("Opening {} with {}", filename, display_editor);
 
-        let mut encrypted_file_path = PathBuf::new();
-        encrypted_file_path.push(&self.journal_path);
-        encrypted_file_path.push(filename);
-
-        let new_file = if !encrypted_file_path.exists() {
-            self.create_new_entry(&encrypted_file_path)?;
-            true
-        } else {
-            false
-        };
-
         let edited = self.decrypt_and_edit_entry(&encrypted_file_path)?;
         if !edited {
             println!("{} wasn't changed, skipping re-encryption.", filename);
         }
-        Ok(new_file || edited)
+        Ok(edited)
     }
 
     pub fn edit(&self, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
@@ -324,5 +321,20 @@ impl EntryEditor {
             return Err(e);
         }
         Ok(changed)
+    }
+
+    pub fn create_entry(&self, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
+        let filename = entry_filename(kind, entry);
+
+        let mut encrypted_file_path = PathBuf::new();
+        encrypted_file_path.push(&self.journal_path);
+        encrypted_file_path.push(filename);
+
+        if !encrypted_file_path.exists() {
+            self.create_new_entry(&encrypted_file_path)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }

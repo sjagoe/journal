@@ -199,22 +199,18 @@ impl App {
     //     f.render_widget(hint, area);
     // }
 
-    fn edit_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    fn edit_entry(&mut self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
         let entry_editor = EntryEditor::new(&self.config)?;
         let file_changed = entry_editor.edit(kind, entry)?;
         if !file_changed {
-            return Ok(());
+            return Ok(file_changed);
         }
 
-        let repo = match Repository::open(&self.config.journal_path) {
-            Ok(repo) => repo,
-            Err(e) => panic!("failed to open: {}", e),
-        };
-        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+        self.journal = Journal::from_file(&self.config.entries_path(), repo);
 
         self.entries_page.update(&self.journal);
 
-        Ok(())
+        Ok(file_changed)
     }
 
     fn new_entry(&mut self, kind: &EntryKind, new_entry: &str) -> Result<(), JournalError> {
@@ -225,20 +221,45 @@ impl App {
 
         if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
             self.journal = journal;
-            let _ = self.journal.git_add(&repo, &self.config.entries_filename()).map_err(|err| match err {
+            let _ = self.journal.git_add(&repo, self.config.entries_filename()).map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
             });
         }
 
-        self.edit_entry(kind, new_entry).map_err(|err| match err {
+        let entry_editor = EntryEditor::new(&self.config)?;
+
+        let created = entry_editor.create_entry(kind, new_entry).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
-        })
+        })?;
+
+        if created {
+            self.journal.git_add_entry(&repo, kind, new_entry).map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+            })?;
+        }
+
+        let changed = self.edit_entry(&repo, kind, new_entry).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+        })?;
+
+        if !changed {
+            self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+        }
+
+        Ok(())
     }
 
     fn edit_existing_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
-        self.edit_entry(kind, entry).map_err(|err| match err {
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        self.edit_entry(&repo, kind, entry).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
-        })
+        })?;
+
+        Ok(())
     }
 
     fn begin_export_entry(&mut self) -> Result<(), JournalError> {

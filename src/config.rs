@@ -17,7 +17,7 @@ impl Config {
     pub fn entries_path(&self) -> PathBuf {
         let mut path = PathBuf::new();
         path.push(&self.journal_path);
-        path.push(&self.entries_filename());
+        path.push(self.entries_filename());
         path
     }
 }
