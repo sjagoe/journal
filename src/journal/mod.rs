@@ -59,7 +59,23 @@ pub struct JournalSection {
 }
 
 impl JournalSection {
-    fn new(kind: EntryKind, entries: Vec<JournalEntry>) -> JournalSection {
+    fn new(
+        kind: EntryKind,
+        repo: &Repository,
+        changes: &LastChanged,
+        items: &[String],
+    ) -> JournalSection {
+        let entries = items
+            .iter()
+            .map(|name| {
+                let filename = entry_filename(&kind, name);
+                let path = Path::new(&filename);
+                let status = repo.status_file(path).ok();
+                let time = changes.get(&filename).copied();
+                JournalEntry::new(name, status, time)
+            })
+            .collect();
+
         JournalSection {
             _kind: kind,
             entries,
@@ -108,24 +124,6 @@ pub fn entry_filename(kind: &EntryKind, name: &str) -> String {
     format!("{}/{}.age", directory, name)
 }
 
-fn to_entries(
-    kind: &EntryKind,
-    repo: &Repository,
-    changes: &LastChanged,
-    items: &[String],
-) -> Vec<JournalEntry> {
-    items
-        .iter()
-        .map(|name| {
-            let filename = entry_filename(kind, name);
-            let path = Path::new(&filename);
-            let status = repo.status_file(path).ok();
-            let time = changes.get(&filename).copied();
-            JournalEntry::new(name, status, time)
-        })
-        .collect()
-}
-
 impl Journal {
     pub fn from_file(path: &PathBuf, repo: &Repository) -> Journal {
         let file = File::open(path).expect("Unable to open entries data");
@@ -135,14 +133,9 @@ impl Journal {
 
         let changes = LastChanged::new(repo);
 
-        let general = JournalSection::new(
-            EntryKind::General,
-            to_entries(&EntryKind::General, repo, &changes, &entries.general),
-        );
-        let narrative = JournalSection::new(
-            EntryKind::Narrative,
-            to_entries(&EntryKind::Narrative, repo, &changes, &entries.narrative),
-        );
+        let general = JournalSection::new(EntryKind::General, repo, &changes, &entries.general);
+        let narrative =
+            JournalSection::new(EntryKind::Narrative, repo, &changes, &entries.narrative);
 
         Journal {
             location: path.to_owned(),
