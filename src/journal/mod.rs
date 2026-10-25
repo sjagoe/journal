@@ -184,7 +184,8 @@ impl Journal {
             EntryKind::Narrative => &mut narrative,
         };
         entries_kind.push(name.to_owned());
-        entries_kind.sort();
+        general.sort();
+        narrative.sort();
 
         let entries = SerializedEntries {
             documents: self._documents.to_owned(),
