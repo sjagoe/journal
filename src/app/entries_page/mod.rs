@@ -145,13 +145,13 @@ impl Navigable for EntriesPage {
         pane.select(journal)
     }
 
-    // fn selected_item(&self) -> String {
-    //     let pane = match self.active_pane {
-    //         ActivePane::General => &self.general_pane,
-    //         ActivePane::Narrative => &self.narrative_pane,
-    //     };
-    //     pane.selected_item()
-    // }
+    fn selected_item(&self, journal: &Journal) -> Option<String> {
+        let pane = match self.active_pane {
+            ActivePane::General => &self.general_pane,
+            ActivePane::Narrative => &self.narrative_pane,
+        };
+        pane.selected_item(journal)
+    }
 
     fn switch_pane(&mut self) {
         let new_active = match self.active_pane {

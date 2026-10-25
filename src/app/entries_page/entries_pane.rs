@@ -208,17 +208,17 @@ impl Navigable for EntriesPane {
     }
 
     fn select(&self, journal: &Journal) -> Option<String> {
-        let section = journal.section(&(&self.pane_kind).into());
-        Some(section[self.selected_index].name.to_string())
+        self.selected_item(journal)
     }
 
-    // fn selected_item(&self) -> String {
-    //     if self.section.is_empty() {
-    //         "".to_string()
-    //     } else {
-    //         self.section[self.selected_index].name.to_string()
-    //     }
-    // }
+    fn selected_item(&self, journal: &Journal) -> Option<String> {
+        let section = journal.section(&(&self.pane_kind).into());
+        if section.is_empty() {
+            None
+        } else {
+            Some(section[self.selected_index].name.to_string())
+        }
+    }
 
     fn switch_pane(&mut self) {}
 }

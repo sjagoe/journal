@@ -199,7 +199,12 @@ impl App {
     //     f.render_widget(hint, area);
     // }
 
-    fn edit_entry(&mut self, repo: &Repository, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
+    fn edit_entry(
+        &mut self,
+        repo: &Repository,
+        kind: &EntryKind,
+        entry: &str,
+    ) -> Result<bool, JournalError> {
         let entry_editor = EntryEditor::new(&self.config)?;
         let file_changed = entry_editor.edit(kind, entry)?;
         if !file_changed {
@@ -221,28 +226,39 @@ impl App {
 
         if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
             self.journal = journal;
-            let _ = self.journal.git_add(&repo, self.config.entries_filename()).map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
-            });
+            let _ = self
+                .journal
+                .git_add(&repo, self.config.entries_filename())
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
+                });
         }
 
         let entry_editor = EntryEditor::new(&self.config)?;
 
-        let created = entry_editor.create_entry(kind, new_entry).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
-        })?;
-
-        if created {
-            self.journal.git_add_entry(&repo, kind, new_entry).map_err(|err| match err {
+        let created = entry_editor
+            .create_entry(kind, new_entry)
+            .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
             })?;
+
+        if created {
+            self.journal
+                .git_add_entry(&repo, kind, new_entry)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+                })?;
         }
 
-        let changed = self.edit_entry(&repo, kind, new_entry).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
-        })?;
+        let changed = self
+            .edit_entry(&repo, kind, new_entry)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+            })?;
 
         if !changed {
+            // Handle when the changed file was not re-read on edit,
+            // because we created it but didn't edit afterwards.
             self.journal = Journal::from_file(&self.config.entries_path(), &repo);
         }
 
@@ -255,9 +271,10 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        self.edit_entry(&repo, kind, entry).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
-        })?;
+        self.edit_entry(&repo, kind, entry)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
+            })?;
 
         Ok(())
     }
@@ -268,6 +285,23 @@ impl App {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
             })?;
         }
+        Ok(())
+    }
+
+    fn git_add_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let repo = match Repository::open(&self.config.journal_path) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        };
+
+        self.journal
+            .git_add_entry(&repo, kind, entry)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+            })?;
+
+        self.journal = Journal::from_file(&self.config.entries_path(), &repo);
+
         Ok(())
     }
 
@@ -345,6 +379,12 @@ impl App {
                 KeyCode::Down => page.next_selection(),
                 KeyCode::Up => page.previous_selection(),
                 KeyCode::Tab => page.switch_pane(),
+                KeyCode::Char('a') => {
+                    if let Some(entry) = page.select(&self.journal) {
+                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                        self.git_add_entry(&entry_kind, &entry)?;
+                    }
+                }
                 _ => {}
             },
             _ => {}
