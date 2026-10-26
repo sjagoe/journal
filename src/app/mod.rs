@@ -300,16 +300,18 @@ impl App {
         Ok(())
     }
 
-    fn git_index_entry(&mut self, action: &dyn Fn(&Journal, &Repository) -> Result<(), JournalError>) -> Result<(), JournalError> {
+    fn git_index_entry(
+        &mut self,
+        action: &dyn Fn(&Journal, &Repository) -> Result<(), JournalError>,
+    ) -> Result<(), JournalError> {
         let repo = match Repository::open(&self.config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        action(&self.journal, &repo)
-            .map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
-            })?;
+        action(&self.journal, &repo).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
+        })?;
 
         self.refresh_from_repo(&repo);
 
@@ -317,9 +319,8 @@ impl App {
     }
 
     fn git_add_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
-        let action = |journal: &Journal, repo: &Repository| {
-            journal.git_index_add_entry(repo, kind, entry)
-        };
+        let action =
+            |journal: &Journal, repo: &Repository| journal.git_index_add_entry(repo, kind, entry);
 
         self.git_index_entry(&action)?;
 
@@ -533,10 +534,10 @@ impl App {
                 ..
             } => match event.code {
                 KeyCode::Home
-                    | KeyCode::End
-                    | KeyCode::Delete
-                    | KeyCode::Backspace
-                    | KeyCode::Char(_) => {
+                | KeyCode::End
+                | KeyCode::Delete
+                | KeyCode::Backspace
+                | KeyCode::Char(_) => {
                     return send_text_entry();
                 }
                 _ => {}
@@ -544,8 +545,10 @@ impl App {
             KeyEvent {
                 modifiers: KeyModifiers::SHIFT,
                 ..
-            } => if let KeyCode::Char(_) = event.code {
-                return send_text_entry();
+            } => {
+                if let KeyCode::Char(_) = event.code {
+                    return send_text_entry();
+                }
             }
             KeyEvent {
                 modifiers: KeyModifiers::CONTROL,

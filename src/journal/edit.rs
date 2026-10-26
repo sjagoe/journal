@@ -258,10 +258,12 @@ impl EntryEditor {
     }
 
     fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
-        let _ = File::create_new(encrypted_file_path)
-            .map_err(|err| {
-                JournalError::chain(&[ErrorKind::FileWriteError, ErrorKind::Wrapped(err.to_string())])
-            })?;
+        let _ = File::create_new(encrypted_file_path).map_err(|err| {
+            JournalError::chain(&[
+                ErrorKind::FileWriteError,
+                ErrorKind::Wrapped(err.to_string()),
+            ])
+        })?;
 
         let now = OffsetDateTime::now_local()
             .map_err(|_| JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime]))?;

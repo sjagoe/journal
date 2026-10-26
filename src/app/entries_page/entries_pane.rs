@@ -51,25 +51,13 @@ fn format_status(status: &Option<Status>) -> Line<'_> {
         };
 
         Line::from(vec![
-            Span::styled(
-                index,
-                style.fg(Color::Green),
-            ),
-            Span::styled(
-                wt,
-                style.fg(Color::Red),
-            ),
+            Span::styled(index, style.fg(Color::Green)),
+            Span::styled(wt, style.fg(Color::Red)),
         ])
     } else {
         Line::from(vec![
-            Span::styled(
-                "?",
-                style.add_modifier(Modifier::DIM),
-            ),
-            Span::styled(
-                "?",
-                style.add_modifier(Modifier::DIM),
-            ),
+            Span::styled("?", style.add_modifier(Modifier::DIM)),
+            Span::styled("?", style.add_modifier(Modifier::DIM)),
         ])
     };
 
@@ -153,12 +141,12 @@ impl Drawable for EntriesPane {
                 _ => "unknown".to_string(),
             };
 
-            let line = format_status(&item.status) +
-                Span::styled(
+            let line = format_status(&item.status)
+                + Span::styled(
                     format!("{:30}", last_modified),
                     style.add_modifier(Modifier::DIM),
-                ) +
-                Span::styled(&item.name, style);
+                )
+                + Span::styled(&item.name, style);
 
             list_items.push(ListItem::new(line));
         }
