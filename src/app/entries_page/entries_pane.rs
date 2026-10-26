@@ -73,13 +73,6 @@ fn format_status(status: &Option<Status>) -> Line<'_> {
         ])
     };
 
-    // format!("{}{}", index, wt);
-
-                // Span::styled(
-                //     format!("{} ", format_status(&item.status)),
-                //     style.add_modifier(Modifier::DIM),
-                // ),
-
     status_line + Span::raw(" ")
 }
 
