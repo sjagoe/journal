@@ -1,12 +1,11 @@
 use std::path::Path;
-use std::{
-    fs::{File, OpenOptions},
-    io::BufReader,
-    path::PathBuf,
-};
+use std::process::Command;
+use std::path::PathBuf;
 
 use git2::{Index, Repository, Status};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use time::OffsetDateTime;
 
 mod age;
@@ -18,13 +17,26 @@ use crate::errors::{ErrorKind, JournalError};
 
 use self::changes::LastChanged;
 
+const ENTRY_DIRECTORY_DOCUMENT: &str = "documents";
+const ENTRY_DIRECTORY_GENERAL: &str = "general";
+const ENTRY_DIRECTORY_NARRATIVE: &str = "narrative";
+
 #[derive(Clone, Debug)]
 pub enum EntryKind {
     General,
     Narrative,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+impl From<&EntryKind> for String {
+    fn from(val: &EntryKind) -> String {
+        match val {
+            EntryKind::General => ENTRY_DIRECTORY_GENERAL.to_owned(),
+            EntryKind::Narrative => ENTRY_DIRECTORY_NARRATIVE.to_owned(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct SerializedEntries {
     documents: Vec<String>,
     general: Vec<String>,
@@ -90,19 +102,6 @@ impl JournalSection {
     pub fn len(&self) -> usize {
         self.entries.len()
     }
-
-    pub fn contains(&self, entry_name: &str) -> bool {
-        for entry in self.entries.iter() {
-            if entry.name == entry_name {
-                return true;
-            }
-        }
-        false
-    }
-
-    // pub fn is_empty(&self) -> bool {
-    //     self.entries.is_empty()
-    // }
 }
 
 impl std::ops::Index<usize> for JournalSection {
@@ -115,26 +114,51 @@ impl std::ops::Index<usize> for JournalSection {
 
 #[derive(Clone, Debug)]
 pub struct Journal {
-    location: PathBuf,
     _documents: Vec<String>,
     pub general: JournalSection,
     pub narrative: JournalSection,
 }
 
 pub fn entry_filename(kind: &EntryKind, name: &str) -> String {
-    let directory = match kind {
-        EntryKind::General => "general",
-        EntryKind::Narrative => "narrative",
-    };
+    let directory = String::from(kind);
     format!("{}/{}.age", directory, name)
 }
 
+fn nix_eval_rules(path: &str) -> SerializedEntries {
+    let mut entries: SerializedEntries = SerializedEntries::default();
+    let mut command = Command::new("nix");
+    command
+        .args([
+            "eval",
+            "--no-net",
+            "--json",
+            "--file",
+            "./rules.nix",
+        ])
+        .current_dir(path);
+    let entry_match = Regex::new(r"^(?<type>[a-z]+)/(?<name>[-_a-zA-Z0-9]+)\.age$").unwrap();
+    if let Ok(result) = command.output()
+        && let Ok(stdout) = str::from_utf8(&result.stdout)
+            && let Value::Object(value) = serde_json::from_str(stdout).expect("Failed to parse `nix evaluate` output") {
+                for entry_path in value.keys() {
+                    if let Some(captures) = entry_match.captures(entry_path) {
+                        let entry_type = captures.name("type").unwrap().as_str();
+                        let entry_name = captures.name("name").unwrap().as_str();
+                        match entry_type {
+                            ENTRY_DIRECTORY_DOCUMENT => entries.documents.push(entry_name.to_owned()),
+                            ENTRY_DIRECTORY_GENERAL => entries.general.push(entry_name.to_owned()),
+                            ENTRY_DIRECTORY_NARRATIVE => entries.narrative.push(entry_name.to_owned()),
+                            _ => panic!("unexpected"),
+                        };
+                    }
+                }
+            }
+    entries
+}
+
 impl Journal {
-    pub fn from_file(path: &PathBuf, repo: &Repository) -> Journal {
-        let file = File::open(path).expect("Unable to open entries data");
-        let reader = BufReader::new(file);
-        let entries: SerializedEntries =
-            serde_json::from_reader(reader).expect("Unable to deserialize entries");
+    pub fn from_file(path: &str, repo: &Repository) -> Journal {
+        let entries = nix_eval_rules(path);
 
         let changes = LastChanged::new(repo);
 
@@ -143,7 +167,6 @@ impl Journal {
             JournalSection::new(EntryKind::Narrative, repo, &changes, &entries.narrative);
 
         Journal {
-            location: path.to_owned(),
             _documents: entries.documents,
             general,
             narrative,
@@ -155,62 +178,6 @@ impl Journal {
             EntryKind::General => &self.general,
             EntryKind::Narrative => &self.narrative,
         }
-    }
-
-    pub fn with_new_entry(
-        &self,
-        kind: &EntryKind,
-        name: &str,
-        repo: &Repository,
-    ) -> Result<Journal, JournalError> {
-        if match kind {
-            EntryKind::General => self.general.contains(name),
-            EntryKind::Narrative => self.narrative.contains(name),
-        } {
-            return Err(JournalError::Error(ErrorKind::EntryExists));
-        }
-
-        let mut general: Vec<String> = self
-            .general
-            .entries
-            .iter()
-            .map(|i| i.name.to_owned())
-            .collect();
-        let mut narrative: Vec<String> = self
-            .narrative
-            .entries
-            .iter()
-            .map(|i| i.name.to_owned())
-            .collect();
-
-        let entries_kind = match kind {
-            EntryKind::General => &mut general,
-            EntryKind::Narrative => &mut narrative,
-        };
-        entries_kind.push(name.to_owned());
-        general.sort();
-        narrative.sort();
-
-        let entries = SerializedEntries {
-            documents: self._documents.to_owned(),
-            general,
-            narrative,
-        };
-
-        let tmp_location = self.location.with_added_extension("tmp");
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp_location)
-            .expect("Unable to open entries data");
-
-        // fixme unwrap!
-        serde_json::to_writer_pretty(file, &entries).unwrap();
-
-        std::fs::rename(&tmp_location, &self.location).unwrap();
-
-        Ok(Journal::from_file(&self.location, repo))
     }
 
     fn git_index(&self, repo: &Repository, filename: &str, action: &dyn Fn(&mut Index, &PathBuf) -> Result<(), git2::Error>) -> Result<(), JournalError> {

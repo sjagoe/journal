@@ -70,7 +70,7 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        let journal = Journal::from_file(&config.entries_path(), &repo);
+        let journal = Journal::from_file(&config.journal_path, &repo);
         let entries_page = EntriesPage::new(&journal);
         let app = App {
             config: config.clone(),
@@ -230,16 +230,6 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        if let Ok(journal) = self.journal.with_new_entry(kind, new_entry, &repo) {
-            self.set_journal(journal);
-            let _ = self
-                .journal
-                .git_index_add(&repo, self.config.entries_filename())
-                .map_err(|err| match err {
-                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::GitError, e]),
-                });
-        }
-
         let entry_editor = EntryEditor::new(&self.config)?;
 
         let created = entry_editor
@@ -254,6 +244,7 @@ impl App {
                 .map_err(|err| match err {
                     JournalError::Error(e) => JournalError::chain(&[ErrorKind::NewEntry, e]),
                 })?;
+            self.refresh_from_repo(&repo);
         }
 
         let changed = self
@@ -295,7 +286,7 @@ impl App {
     }
 
     fn refresh_from_repo(&mut self, repo: &Repository) {
-        self.set_journal(Journal::from_file(&self.config.entries_path(), repo));
+        self.set_journal(Journal::from_file(&self.config.journal_path, repo));
     }
 
     fn refresh(&mut self) -> Result<(), JournalError> {

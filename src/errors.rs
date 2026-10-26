@@ -68,9 +68,9 @@ pub enum ErrorKind {
     CommandParseError,
     EditingEntry,
     ExportingEntry,
-    EntryExists,
+    // EntryExists,
     AppExit,
-    GitError,
+    // GitError,
     GitIndexError,
     FileMissingError,
 }
@@ -102,9 +102,9 @@ impl ErrorKind {
             ErrorKind::EditingEntry => "Failed to edit file",
             ErrorKind::ExportingEntry => "Failed to export the entry",
             ErrorKind::NewEntry => "Failed to create new entry",
-            ErrorKind::EntryExists => "New entry is already tracked",
+            // ErrorKind::EntryExists => "New entry is already tracked",
             ErrorKind::AppExit => "Normal application exit",
-            ErrorKind::GitError => "Error performing git action",
+            // ErrorKind::GitError => "Error performing git action",
             ErrorKind::GitIndexError => "Failed to reference the git index",
             ErrorKind::FileMissingError => "File to be edited does not exist,",
         }

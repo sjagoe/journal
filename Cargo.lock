@@ -1436,6 +1436,7 @@ dependencies = [
  "git2",
  "ratatui",
  "ratin",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.11.1",

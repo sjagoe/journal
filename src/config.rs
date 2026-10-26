@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf};
+use std::fmt;
 
 use serde::Deserialize;
 
@@ -7,19 +7,6 @@ pub struct Config {
     pub editor: Option<String>,
     pub identity: String,
     pub journal_path: String,
-}
-
-impl Config {
-    pub fn entries_filename(&self) -> &str {
-        "entries.json"
-    }
-
-    pub fn entries_path(&self) -> PathBuf {
-        let mut path = PathBuf::new();
-        path.push(&self.journal_path);
-        path.push(self.entries_filename());
-        path
-    }
 }
 
 impl fmt::Display for Config {
