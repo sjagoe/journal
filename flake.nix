@@ -110,7 +110,7 @@
               ];
 
               # ew
-              # LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.gpgme pkgs.libgpg-error ];
+              _JOURNAL_LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.gpgme pkgs.libgpg-error ];
             };
           });
 }
