@@ -31,15 +31,16 @@
     in
       eachSystem (system:
         let
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [ rust-overlay.overlays.default ];
-          };
+          pkgs = nixpkgs.legacyPackages.${system};
+          # pkgs = import nixpkgs {
+          #   inherit system;
+          #   overlays = [ rust-overlay.overlays.default ];
+          # };
           inherit (pkgs) lib;
 
           buildPlatformSuffix = pkgs.lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
 
-          toolchain = pkgs.rust-bin.stable.latest.default.override {
+          toolchain = rust-overlay.packages.${system}.default.override {
             extensions = [ "rust-src" ];
           };
 
