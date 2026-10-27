@@ -9,7 +9,6 @@ use age::{
         StdinGuard,
         file_io::{InputReader, OutputFormat, OutputWriter},
     },
-    decryptor::RecipientsDecryptor,
 };
 
 use crate::errors::{ErrorKind, JournalError};
@@ -25,7 +24,7 @@ pub(super) fn load_identities(identity: &str) -> Result<Vec<Box<dyn age::Identit
 
 pub(super) fn get_age_decryptor<P: AsRef<Path>>(
     path: P,
-) -> Result<RecipientsDecryptor<ArmoredReader<BufReader<InputReader>>>, JournalError> {
+) -> Result<age::Decryptor<ArmoredReader<BufReader<InputReader>>>, JournalError> {
     let s = path.as_ref().to_str().map(std::string::ToString::to_string);
     let input_reader =
         InputReader::new(s).map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
@@ -33,10 +32,11 @@ pub(super) fn get_age_decryptor<P: AsRef<Path>>(
         JournalError::chain(&[ErrorKind::FileReadError, ErrorKind::DecryptionPipeline])
     })?;
 
-    match decryptor {
-        age::Decryptor::Passphrase(_) => Err(JournalError::Error(ErrorKind::DecryptionPassphrase)),
-        age::Decryptor::Recipients(decryptor) => Ok(decryptor),
+    if decryptor.is_scrypt() {
+        return Err(JournalError::Error(ErrorKind::DecryptionPassphrase));
     }
+
+    Ok(decryptor)
 }
 
 pub(super) fn decrypt<P: AsRef<Path>>(
