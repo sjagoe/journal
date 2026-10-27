@@ -8,8 +8,8 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
+    fenix = {
+      url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -24,23 +24,20 @@
   };
 
   outputs =
-    { nixpkgs, crane, rust-overlay, flake-utils, ... }:
+    { nixpkgs, crane, fenix, flake-utils, ... }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       eachSystem = flake-utils.lib.eachSystem systems;
     in
       eachSystem (system:
         let
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [ rust-overlay.overlays.default ];
-          };
+          pkgs = nixpkgs.legacyPackages.${system};
           inherit (pkgs) lib;
 
           buildPlatformSuffix = pkgs.lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
 
           toolchain =
-            rust-overlay.packages.${system}.default;
+            fenix.packages.${system}.stable.toolchain;
             # with fenix.packages.${system};
             # combine [
             #   default.toolchain
@@ -107,12 +104,13 @@
 
               # Extra inputs can be added here; cargo and rustc are provided by default.
               packages = [
-                toolchain.passthru.availableComponents.rust-analyzer
-                # pkgs.rust-analyzer-unwrapped
                 pkgs.pkg-config
                 pkgs.libgpg-error
                 pkgs.gpgme
               ];
+
+              # ew
+              _JOURNAL_LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.gpgme pkgs.libgpg-error ];
             };
           });
 }
