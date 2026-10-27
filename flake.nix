@@ -39,14 +39,9 @@
 
           buildPlatformSuffix = pkgs.lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
 
-          toolchain =
-            rust-overlay.packages.${system}.default;
-            # with fenix.packages.${system};
-            # combine [
-            #   default.toolchain
-            #   stable.rust-src
-            #   targets.x86_64-pc-windows-gnu.latest.rust-std
-            # ];
+          toolchain = pkgs.rust-bin.stable.latest.default.override {
+            extensions = [ "rust-src" ];
+          };
 
           craneLib = (crane.mkLib pkgs).overrideToolchain (p: toolchain);
 
