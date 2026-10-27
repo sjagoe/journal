@@ -13,7 +13,7 @@ use crate::{
     errors::{ErrorKind, JournalError},
 };
 
-use super::{EntryKind, entry_filename};
+use super::{EntryKind, edit::program_from_string, entry_filename};
 use super::{
     age::{decrypt, load_identities},
     edit::EntryEditor,
@@ -31,6 +31,19 @@ pub struct EntryExporter {
     entry_editor: EntryEditor,
     dir: TempDir,
     export_process: Option<ExportProcess>,
+    export_command: String,
+    export_command_args: Vec<String>,
+}
+
+fn get_export_command(
+    configured_export: Option<String>,
+) -> Result<(String, Vec<String>), JournalError> {
+    match configured_export {
+        Some(ref export) => program_from_string(export),
+        None => {
+            Ok(("xdg-open".to_string(), vec![]))
+        }
+    }
 }
 
 impl EntryExporter {
@@ -39,12 +52,18 @@ impl EntryExporter {
         let dir = tempfile::tempdir()
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         let entry_editor = EntryEditor::new(config)?;
+
+        let (export_command, export_command_args) =
+            get_export_command(config.export.as_ref().map(|export| export.to_owned()))?;
+
         let exporter = Self {
             filename,
             progress: 0.0,
             entry_editor,
             dir,
             export_process: None,
+            export_command,
+            export_command_args,
         };
         Ok(exporter)
     }
@@ -121,7 +140,8 @@ impl EntryExporter {
     }
 
     fn spawn_browser(&mut self, exported_path: &PathBuf) -> Result<(), JournalError> {
-        let mut command = Command::new("xdg-open");
+        let mut command = Command::new(&self.export_command);
+        command.args(&self.export_command_args);
         command.arg(exported_path);
 
         if let Ok(child) = command.spawn() {

@@ -34,7 +34,7 @@ pub(crate) fn sha256<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     Ok(hasher.0.finalize().to_vec())
 }
 
-fn editor_from_string(editor: &str) -> Result<(String, Vec<String>), JournalError> {
+pub fn program_from_string(editor: &str) -> Result<(String, Vec<String>), JournalError> {
     let parts = split(editor).map_err(|_| {
         JournalError::chain(&[
             ErrorKind::Subprocess,
@@ -51,7 +51,7 @@ fn get_editor_command(
     configured_editor: Option<String>,
 ) -> Result<(String, Vec<String>), JournalError> {
     match configured_editor {
-        Some(ref editor) => editor_from_string(editor),
+        Some(ref editor) => program_from_string(editor),
         None => {
             if let Some(visual_env) = env::var_os("VISUAL") {
                 let pager = visual_env.into_string().map_err(|_| {
@@ -61,7 +61,7 @@ fn get_editor_command(
                         ErrorKind::Wrapped("Could not parse VISUAL env var".to_string()),
                     ])
                 })?;
-                editor_from_string(&pager)
+                program_from_string(&pager)
             } else if let Some(editor_env) = env::var_os("EDITOR") {
                 let pager = editor_env.into_string().map_err(|_| {
                     JournalError::chain(&[
@@ -70,7 +70,7 @@ fn get_editor_command(
                         ErrorKind::Wrapped("Could not parse EDITOR env var".to_string()),
                     ])
                 })?;
-                editor_from_string(&pager)
+                program_from_string(&pager)
             } else {
                 let args: Vec<String> = vec![];
                 Ok(("nano".to_string(), args))
