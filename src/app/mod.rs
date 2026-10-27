@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use git2::{ErrorCode, Repository};
+use git2::Repository;
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
@@ -20,7 +20,7 @@ use crate::{
     app::entries_page::{ActivePane, EntriesPage},
     config::Config,
     errors::{ErrorKind, JournalError},
-    journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter},
+    journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git},
     traits::{Drawable, Navigable},
     ui::centered_rect,
 };
@@ -343,45 +343,7 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        let mut index = repo
-            .index()
-            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
-
-        let parent_commit = match repo.revparse_single("HEAD") {
-            Ok(obj) => Some(obj.into_commit().unwrap()),
-            // First commit so no parent commit
-            Err(e) if e.code() == ErrorCode::NotFound => None,
-            Err(e) => return Err(JournalError::Error(ErrorKind::Wrapped(e.to_string()))),
-        };
-
-        let mut parents = Vec::new();
-        if let Some(ref parent) = parent_commit {
-            parents.push(parent);
-        }
-
-        let signature = repo
-            .signature()
-            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
-
-        let commit_oid = repo
-            .commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                message,
-                &tree,
-                &parents[..],
-            )
-            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
-
-        let _commit = repo
-            .find_commit(commit_oid)
+        git::commit(&repo, message)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         self.refresh_from_repo(&repo);

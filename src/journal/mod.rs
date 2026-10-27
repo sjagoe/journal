@@ -12,6 +12,7 @@ mod age;
 mod changes;
 pub(crate) mod edit;
 pub(crate) mod export;
+pub(crate) mod git;
 
 use crate::errors::{ErrorKind, JournalError};
 

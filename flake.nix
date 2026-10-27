@@ -62,6 +62,13 @@
                 strictDeps = true;
 
                 buildInputs = [
+                  pkgs.libgpg-error.dev
+                  pkgs.gpgme.dev
+                ];
+
+                nativeBuildInputs = [
+                  pkgs.pkg-config
+                  pkgs.autoPatchelfHook
                   # Add additional build inputs here
                 ];
 
@@ -97,7 +104,13 @@
 
               # Extra inputs can be added here; cargo and rustc are provided by default.
               packages = [
+                pkgs.pkg-config
+                pkgs.libgpg-error
+                pkgs.gpgme
               ];
+
+              # ew
+              # LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.gpgme pkgs.libgpg-error ];
             };
           });
 }
