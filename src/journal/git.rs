@@ -6,7 +6,7 @@ use gpgme::{Context, Protocol};
 fn sign_commit(commit_content: &[u8], signature: &mut Vec<u8>) -> Result<(), gpgme::Error> {
     let mut ctx = Context::from_protocol(Protocol::OpenPgp)?;
     ctx.set_armor(true);
-    ctx.sign_detached(&*commit_content, signature)?;
+    ctx.sign_detached(commit_content, signature)?;
 
     Ok(())
 }
@@ -41,7 +41,7 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
         let contents = commit_content.as_str()?;
         let out = str::from_utf8(&signature)?;
 
-        repo.commit_signed(&contents, &out, Some("gpgsig"))?
+        repo.commit_signed(contents, out, Some("gpgsig"))?
     } else {
         repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents[..])?
     };
