@@ -8,8 +8,8 @@
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
-    fenix = {
-      url = "github:nix-community/fenix";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -24,7 +24,7 @@
   };
 
   outputs =
-    { nixpkgs, crane, fenix, flake-utils, ... }:
+    { nixpkgs, crane, rust-overlay, flake-utils, ... }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       eachSystem = flake-utils.lib.eachSystem systems;
@@ -37,7 +37,7 @@
           buildPlatformSuffix = pkgs.lib.strings.toLower pkgs.pkgsBuildHost.stdenv.hostPlatform.rust.cargoEnvVarTarget;
 
           toolchain =
-            fenix.packages.${system}.stable.toolchain;
+            rust-overlay.packages.${system}.default;
             # with fenix.packages.${system};
             # combine [
             #   default.toolchain
@@ -108,9 +108,6 @@
                 pkgs.libgpg-error
                 pkgs.gpgme
               ];
-
-              # ew
-              _JOURNAL_LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.gpgme pkgs.libgpg-error ];
             };
           });
 }
