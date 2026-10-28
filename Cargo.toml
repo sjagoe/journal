@@ -13,7 +13,7 @@ crossterm = "0.29.0"
 digest-io = "0.1.0"
 dirs = "6.0.0"
 git2 = "0.21.0"
-gpgme = "0.11.0"
+gpgme = { git = "https://github.com/gpg-rs/gpgme", rev = "4f24ed421f25ec89b57fe2b243477f2e53774087" }
 ratatui = "0.30.0"
 ratin = "0.2.1"
 regex = "1.13.1"
