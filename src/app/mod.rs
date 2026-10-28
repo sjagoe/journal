@@ -31,6 +31,8 @@ pub struct EventHandled(pub bool);
 
 static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]");
+static NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT: StaticFormatDescription =
+    format_description!("-[day]_");
 
 trait SetText {
     fn set_text(&mut self, text: &str);
@@ -401,10 +403,14 @@ impl App {
                             self.new_entry(&EntryKind::General, &default_name)?;
                         }
                         ActivePane::Narrative => {
+                            let name_suffix = now.format(NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT).map_err(|_| {
+                                JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
+                            })?;
+                            let name_prefix = format!("{}{}", &default_name, &name_suffix);
+
                             let mut text_entry = ratin::InputField::new()
                                 .with_placeholder("New entry name ...")
                                 .with_max_length(50);
-                            let name_prefix = format!("{}-", default_name);
                             text_entry.set_text(&name_prefix);
                             self.text_entry = Some(text_entry);
                             self.mode = AppMode::NewEntry;
