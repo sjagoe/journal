@@ -284,9 +284,7 @@ impl KeyMap {
             } else {
                 let map_action = KeyMapAction::Action(action.clone());
                 keys.insert(input.to_owned(), map_action.to_owned());
-                if !reverse.contains_key(&map_action) {
-                    reverse.insert(map_action, input.to_owned());
-                }
+                reverse.entry(map_action).or_insert_with(|| input.to_owned());
             }
         }
     }
@@ -297,8 +295,8 @@ impl KeyMap {
         let mut reverse: KeyMapReverseType = HashMap::new();
 
         for (keyseq, action_name) in mapconfig.iter() {
-            let input_chain = InputChain::from_str(&keyseq)?;
-            let action = Action::from_str(&action_name)?;
+            let input_chain = InputChain::from_str(keyseq)?;
+            let action = Action::from_str(action_name)?;
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
@@ -344,7 +342,7 @@ impl Default for KeyMap {
         let mut reverse: KeyMapReverseType = HashMap::new();
 
         for (keyseq, action) in DEFAULT_KEYS {
-            let input_chain = InputChain::from_str(&keyseq).unwrap();
+            let input_chain = InputChain::from_str(keyseq).unwrap();
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
@@ -418,7 +416,7 @@ impl InputHandler {
     }
 
     fn handle_chained_input(&self, input: &InputChain) -> Action {
-        match self.key_map.action(&input) {
+        match self.key_map.action(input) {
             KeyMapAction::Action(action) => match action {
                 Action::NoOp => Action::NextMode(InputMode::Ready(None)),
                 _ => action,

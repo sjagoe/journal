@@ -381,7 +381,7 @@ impl App {
                                     ErrorKind::FormatDateTime,
                                 ])
                             })?;
-                        let name_prefix = format!("{}{}", &default_name, &name_suffix);
+                        let name_prefix = format!("{}{}", default_name, name_suffix);
 
                         self.input_handler
                             .prepare_entry("New entry name ...", Some(&name_prefix));
@@ -405,7 +405,7 @@ impl App {
                 if entry_name.is_empty() {
                     return err();
                 }
-                self.new_entry(&EntryKind::Narrative, &entry_name)?;
+                self.new_entry(&EntryKind::Narrative, entry_name)?;
 
                 return Ok(Redraw(true));
             }
@@ -467,7 +467,7 @@ impl App {
                 if commit_message.is_empty() {
                     return err();
                 }
-                self.git_commit(&commit_message)?;
+                self.git_commit(commit_message)?;
                 return Ok(Redraw(true));
             }
 
