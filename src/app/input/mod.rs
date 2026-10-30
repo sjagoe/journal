@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashMap, str::FromStr};
+use std::{collections::HashMap, fmt::{self, Display}, str::FromStr};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use ratatui::{
@@ -33,8 +33,8 @@ pub(super) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
 }
 
-impl ToString for InputChain {
-    fn to_string(&self) -> String {
+impl Display for InputChain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut parts: Vec<String> = Vec::new();
         for input in self.prior_inputs.iter() {
             let mut input_str: Vec<String> = Vec::new();
@@ -57,7 +57,7 @@ impl ToString for InputChain {
             }
             parts.push(input_str.join(""));
         }
-        parts.join(" ")
+        write!(f, "{}", parts.join(" "))
     }
 }
 
@@ -139,18 +139,19 @@ enum KeyMapAction {
 }
 
 impl KeyMapAction {
-    #[allow(unused)]
-    fn to_string(&self) -> String {
-        match self {
-            KeyMapAction::Action(action) => format!("{:?}", action),
-            KeyMapAction::Input(input) => input.to_string(),
-        }
-    }
-
     fn to_owned(&self) -> KeyMapAction {
         match self {
             KeyMapAction::Action(action) => KeyMapAction::Action(action.clone()),
             KeyMapAction::Input(input) => KeyMapAction::Input(input.to_owned()),
+        }
+    }
+}
+
+impl Display for KeyMapAction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            KeyMapAction::Action(action) => write!(f, "{:?}", action),
+            KeyMapAction::Input(input) => write!(f, "{}", input),
         }
     }
 }
@@ -242,21 +243,11 @@ impl KeyMap {
             let key_action = KeyMapAction::Action(action.clone());
             if let Some(binding) = self.reverse.get(&key_action) {
                 let binding_str = binding.to_string();
-                bindings.push(format!("{}: {}", binding_str, action.to_string()));
+                bindings.push(format!("{}: {}", binding_str, action));
             }
         }
 
         bindings
-    }
-
-    #[allow(unused)]
-    pub fn to_string(&self) -> String {
-        let mut lines: Vec<String> = Vec::new();
-        for (input, action) in self.map.iter() {
-            let line = format!("{}: {}", input.to_string(), action.to_string());
-            lines.push(line);
-        }
-        lines.join("\n")
     }
 
     fn add_keymap(
@@ -298,6 +289,17 @@ impl KeyMap {
         } else {
             KeyMapAction::Action(Action::NoOp)
         }
+    }
+}
+
+impl Display for KeyMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut lines: Vec<String> = Vec::new();
+        for (input, action) in self.map.iter() {
+            let line = format!("{}: {}", input, action);
+            lines.push(line);
+        }
+        write!(f, "{}", lines.join("\n"))
     }
 }
 

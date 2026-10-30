@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::{self, Display}, str::FromStr};
 
 use crossterm::event::KeyCode;
 
@@ -40,8 +40,8 @@ pub(super) enum Action {
     NoOp,
 }
 
-impl ToString for Action {
-    fn to_string(&self) -> String {
+impl Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let result = match self {
             Action::AppExit => "AppExit",
 
@@ -74,7 +74,7 @@ impl ToString for Action {
 
             Action::NoOp => "NoOp",
         };
-        result.to_string()
+        write!(f, "{}", result)
     }
 }
 
