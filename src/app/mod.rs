@@ -476,6 +476,14 @@ impl App {
             }
             Action::ClearTextEntry => {
                 self.input_handler.clear_text_entry()?;
+                // fixme this is a weird workaround
+                if let Some(mode) = match self.mode {
+                    InputMode::NewEntry(_) => Some(InputMode::NewEntry(None)),
+                    InputMode::Commit(_) => Some(InputMode::Commit(None)),
+                    _ => None,
+                } {
+                    self.mode = mode;
+                }
             }
 
             Action::NextMode(mode) => {
