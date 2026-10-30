@@ -68,7 +68,7 @@ impl App {
             entries_page,
             input_handler,
             height: 0,
-            mode: InputMode::Ready,
+            mode: InputMode::Ready(None),
             entry_exporter: None,
         };
         Ok(app)
@@ -165,8 +165,8 @@ impl App {
 
         match self.mode {
             InputMode::Error(ref error) => self.display_error(frame, error),
-            InputMode::NewEntry | InputMode::Commit => self.input_handler.render_input(frame),
-            InputMode::ExportEntry => self.draw_export_progress(frame),
+            InputMode::NewEntry(_) | InputMode::Commit(_) => self.input_handler.render_input(frame),
+            InputMode::ExportEntry(_) => self.draw_export_progress(frame),
             _ => {}
         }
 
@@ -355,7 +355,7 @@ impl App {
                     let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
                     self.entry_exporter = Some(entry_exporter);
                     self.begin_export_entry()?;
-                    self.mode = InputMode::ExportEntry;
+                    self.mode = InputMode::ExportEntry(None);
                     return Ok(Redraw(false));
                 }
             }
@@ -386,7 +386,7 @@ impl App {
                         self.input_handler
                             .prepare_entry("New entry name ...", Some(&name_prefix));
 
-                        self.mode = InputMode::NewEntry;
+                        self.mode = InputMode::NewEntry(None);
                     }
                 }
                 return Ok(Redraw(true));
@@ -400,7 +400,7 @@ impl App {
                         ErrorKind::TextEntryFailed,
                     ]))
                 };
-                self.mode = InputMode::Ready;
+                self.mode = InputMode::Ready(None);
                 // fixme need actial validation
                 if entry_name.is_empty() {
                     return err();
@@ -431,7 +431,7 @@ impl App {
             Action::NavigateLast => page.end(),
             Action::NavigateSwitchPane => page.switch_pane(),
             Action::NavigateBack => {
-                self.mode = InputMode::Ready;
+                self.mode = InputMode::Ready(None);
                 return Ok(Redraw(true));
             }
 
@@ -451,7 +451,7 @@ impl App {
 
             Action::GitCommitMessage => {
                 self.input_handler.prepare_entry("Commit message ...", None);
-                self.mode = InputMode::Commit;
+                self.mode = InputMode::Commit(None);
             }
 
             Action::GitPerformCommit(ref commit_message) => {
@@ -462,7 +462,7 @@ impl App {
                         ErrorKind::TextEntryFailed,
                     ]))
                 };
-                self.mode = InputMode::Ready;
+                self.mode = InputMode::Ready(None);
                 // fixme need actial validation
                 if commit_message.is_empty() {
                     return err();
@@ -489,18 +489,18 @@ impl App {
     }
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<Redraw, JournalError> {
-        if let InputMode::ExportEntry = self.mode
+        if let InputMode::ExportEntry(_) = self.mode
             && let Some(ref mut exporter) = self.entry_exporter
         {
             match exporter.tick(tick_duration) {
                 Ok(export_complete) => {
                     if export_complete {
-                        self.mode = InputMode::Ready;
+                        self.mode = InputMode::Ready(None);
                         self.entry_exporter = None;
                     }
                 }
                 Err(e) => {
-                    self.mode = InputMode::Ready;
+                    self.mode = InputMode::Ready(None);
                     self.entry_exporter = None;
                     return Err(e);
                 }

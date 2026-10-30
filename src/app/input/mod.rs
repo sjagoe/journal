@@ -254,7 +254,12 @@ impl KeyMap {
         lines.join("\n")
     }
 
-    fn add_keymap(keys: &mut KeyMapType, reverse: &mut KeyMapReverseType, input: &InputChain, action: &Action) {
+    fn add_keymap(
+        keys: &mut KeyMapType,
+        reverse: &mut KeyMapReverseType,
+        input: &InputChain,
+        action: &Action,
+    ) {
         for (input, next_input) in input.get_chain().iter() {
             if let Some(next_input) = next_input {
                 let next = KeyMapAction::Input(next_input.to_owned());
@@ -279,10 +284,7 @@ impl KeyMap {
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        let map = KeyMap {
-            map: keys,
-            reverse,
-        };
+        let map = KeyMap { map: keys, reverse };
         Ok(map)
     }
 
@@ -295,9 +297,10 @@ impl KeyMap {
     }
 }
 
-const DEFAULT_KEYS: [(&str, Action); 19] = [
+const DEFAULT_KEYS: [(&str, Action); 20] = [
     ("C-x", Action::AppExit),
     ("C-e", Action::ExportEntry),
+    ("C-g", Action::NavigateBack),
     ("C-n", Action::NavigateNext),
     ("C-p", Action::NavigatePrevious),
     ("C-v", Action::NavigatePageDown),
@@ -333,11 +336,10 @@ impl Default for KeyMap {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) enum InputMode {
-    Ready,
-    ChainedInput(InputChain),
-    NewEntry,
-    ExportEntry,
-    Commit,
+    Ready(Option<InputChain>),
+    NewEntry(Option<InputChain>),
+    ExportEntry(Option<InputChain>),
+    Commit(Option<InputChain>),
     Error(JournalError),
 }
 
@@ -366,7 +368,7 @@ impl InputHandler {
         ];
 
         match mode {
-            InputMode::Ready | InputMode::ChainedInput(_) => {
+            InputMode::Ready(_) => {
                 let bindings = &self.key_map.keybindings()[..];
                 for row in bindings.chunks(widths.len()) {
                     let mut row_vec: Vec<String> = Vec::new();
@@ -382,7 +384,13 @@ impl InputHandler {
         let table = Table::default().rows(rows).widths(widths).block(block);
         frame.render_widget(table, hint_area);
 
-        if let InputMode::ChainedInput(input) = mode {
+        if let Some(input) = match mode {
+            InputMode::Ready(input) => input,
+            InputMode::NewEntry(input) => input,
+            InputMode::ExportEntry(input) => input,
+            InputMode::Commit(input) => input,
+            _ => &None,
+        } {
             let current_entry = Line::from(Span::from(input.to_string()));
             frame.render_widget(current_entry, current_area);
         }
@@ -399,11 +407,69 @@ impl InputHandler {
     fn handle_chained_input(&self, input: &InputChain) -> Action {
         match self.key_map.action(&input) {
             KeyMapAction::Action(action) => match action {
-                Action::NoOp => Action::NextMode(InputMode::Ready),
+                Action::NoOp => Action::NextMode(InputMode::Ready(None)),
                 _ => action,
             },
-            KeyMapAction::Input(_) => Action::NextMode(InputMode::ChainedInput(input.clone())),
+            KeyMapAction::Input(_) => Action::NextMode(InputMode::Ready(Some(input.clone()))),
         }
+    }
+
+    fn handle_text_entry_event(
+        &self,
+        mode: &InputMode,
+        event: &KeyEvent,
+    ) -> Result<Option<Action>, JournalError> {
+        match event {
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Enter,
+                ..
+            } => {
+                match self.get_entered_text() {
+                    Ok(text) => {
+                        // fixme validation for both input kinds
+                        // Missing ErrorKind::Commit
+                        let _ = self.get_entered_text().map_err(|err| match err {
+                            JournalError::Error(e) => JournalError::chain(&[
+                                ErrorKind::InvalidMode,
+                                ErrorKind::NewEntry,
+                                e,
+                            ]),
+                        })?;
+
+                        match mode {
+                            InputMode::NewEntry(_) => return Ok(Some(Action::CreateEntry(text))),
+                            InputMode::Commit(_) => {
+                                return Ok(Some(Action::GitPerformCommit(text)));
+                            }
+                            _ => {}
+                        }
+                    }
+                    Err(e) => return Ok(Some(Action::DisplayError(e))),
+                }
+            }
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Home | KeyCode::End | KeyCode::Delete | KeyCode::Backspace,
+                ..
+            } => return Ok(Some(Action::TextEntry(event.code))),
+            KeyEvent {
+                modifiers: KeyModifiers::SHIFT,
+                code: KeyCode::Char(_),
+                ..
+            } => {
+                return Ok(Some(Action::TextEntry(event.code)));
+            }
+            KeyEvent {
+                modifiers: KeyModifiers::NONE,
+                code: KeyCode::Char(_),
+                ..
+            } => {
+                return Ok(Some(Action::TextEntry(event.code)));
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     pub(super) fn action(
@@ -412,97 +478,53 @@ impl InputHandler {
         event: &KeyEvent,
     ) -> Result<Action, JournalError> {
         match mode {
-            InputMode::ChainedInput(input) => {
-                let next_input = input.chain(event);
-                return Ok(self.handle_chained_input(&next_input));
-            }
-            InputMode::Ready => {
-                let input = InputChain::from(event);
+            InputMode::Ready(maybe_input) => {
+                let input = if let Some(input) = maybe_input {
+                    input.chain(event)
+                } else {
+                    InputChain::from(event)
+                };
                 return Ok(self.handle_chained_input(&input));
             }
-            InputMode::NewEntry | InputMode::Commit => {
-                match event {
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Enter,
-                        ..
-                    } => {
-                        match self.get_entered_text() {
-                            Ok(text) => {
-                                // fixme validation for both input kinds
-                                // Missing ErrorKind::Commit
-                                let _ = self.get_entered_text().map_err(|err| match err {
-                                    JournalError::Error(e) => JournalError::chain(&[
-                                        ErrorKind::InvalidMode,
-                                        ErrorKind::NewEntry,
-                                        e,
-                                    ]),
-                                })?;
+            InputMode::NewEntry(maybe_input) | InputMode::Commit(maybe_input) => {
+                if let Some(action) = self.handle_text_entry_event(mode, event)? {
+                    return Ok(action);
+                }
 
-                                match mode {
-                                    InputMode::NewEntry => return Ok(Action::CreateEntry(text)),
-                                    InputMode::Commit => return Ok(Action::GitPerformCommit(text)),
-                                    _ => {}
-                                }
+                let input = if let Some(input) = maybe_input {
+                    input.chain(event)
+                } else {
+                    InputChain::from(event)
+                };
+
+                let action = match self.key_map.action(&input) {
+                    KeyMapAction::Action(action) => match action {
+                        Action::NavigateBack => action,
+                        Action::AppExit => {
+                            let text = self.get_entered_text()?;
+                            if text.is_empty() {
+                                Action::NavigateBack
+                            } else {
+                                Action::ClearTextEntry
                             }
-                            Err(e) => return Ok(Action::DisplayError(e)),
                         }
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Home | KeyCode::End | KeyCode::Delete | KeyCode::Backspace,
-                        ..
-                    } => return Ok(Action::TextEntry(event.code)),
-                    KeyEvent {
-                        modifiers: KeyModifiers::SHIFT,
-                        code: KeyCode::Char(_),
-                        ..
-                    } => {
-                        return Ok(Action::TextEntry(event.code));
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Char(_),
-                        ..
-                    } => {
-                        return Ok(Action::TextEntry(event.code));
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::CONTROL,
-                        code: KeyCode::Char('g'),
-                        ..
-                    } => return Ok(Action::NavigateBack),
-                    KeyEvent {
-                        modifiers: KeyModifiers::CONTROL,
-                        code: KeyCode::Char('x'),
-                        ..
-                    } => {
-                        let text = self.get_entered_text()?;
-                        if text.is_empty() {
-                            return Ok(Action::NavigateBack);
-                        } else {
-                            return Ok(Action::ClearTextEntry);
+                        _ => Action::NoOp,
+                    },
+                    KeyMapAction::Input(_) => match mode {
+                        InputMode::NewEntry(_) => {
+                            Action::NextMode(InputMode::NewEntry(Some(input.clone())))
                         }
-                    }
-                    _ => {}
-                }
+                        InputMode::Commit(_) => {
+                            Action::NextMode(InputMode::Commit(Some(input.clone())))
+                        }
+                        _ => Action::NoOp,
+                    },
+                };
+
+                return Ok(action);
             }
-            InputMode::ExportEntry => {}
-            InputMode::Error(_) => match event {
-                KeyEvent {
-                    modifiers: KeyModifiers::NONE,
-                    code: KeyCode::Enter,
-                    ..
-                }
-                | KeyEvent {
-                    modifiers: KeyModifiers::CONTROL,
-                    code: KeyCode::Char('g') | KeyCode::Char('x'),
-                    ..
-                } => {
-                    return Ok(Action::NavigateBack);
-                }
-                _ => {}
-            },
+            InputMode::ExportEntry(_) => {}
+            InputMode::Error(_) => return Ok(Action::NavigateBack),
         }
         Ok(Action::NoOp)
     }
