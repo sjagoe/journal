@@ -173,7 +173,7 @@ type KeyMapReverseType = HashMap<KeyMapAction, InputChain>;
 #[derive(Debug)]
 struct KeyMap {
     map: KeyMapType,
-    reverse: KeyMapReverseType,
+    _reverse: KeyMapReverseType,
 }
 
 fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
@@ -284,7 +284,7 @@ impl KeyMap {
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        let map = KeyMap { map: keys, reverse };
+        let map = KeyMap { map: keys, _reverse: reverse };
         Ok(map)
     }
 
@@ -330,7 +330,7 @@ impl Default for KeyMap {
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        KeyMap { map: keys, reverse }
+        KeyMap { map: keys, _reverse: reverse }
     }
 }
 
