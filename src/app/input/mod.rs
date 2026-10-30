@@ -502,6 +502,15 @@ impl InputHandler {
                                 Action::ClearTextEntry
                             }
                         }
+                        Action::NoOp => match mode {
+                            InputMode::NewEntry(_) => {
+                                Action::NextMode(InputMode::NewEntry(None))
+                            }
+                            InputMode::Commit(_) => {
+                                Action::NextMode(InputMode::Commit(None))
+                            }
+                            _ => Action::NoOp,
+                        }
                         _ => Action::NoOp,
                     },
                     KeyMapAction::Input(_) => match mode {
