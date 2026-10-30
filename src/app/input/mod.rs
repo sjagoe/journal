@@ -412,6 +412,10 @@ impl InputHandler {
         event: &KeyEvent,
     ) -> Result<Action, JournalError> {
         match mode {
+            InputMode::ChainedInput(input) => {
+                let next_input = input.chain(event);
+                return Ok(self.handle_chained_input(&next_input));
+            }
             InputMode::Ready => {
                 let input = InputChain::from(event);
                 return Ok(self.handle_chained_input(&input));
@@ -499,10 +503,6 @@ impl InputHandler {
                 }
                 _ => {}
             },
-            InputMode::ChainedInput(input) => {
-                let next_input = input.chain(event);
-                return Ok(self.handle_chained_input(&next_input));
-            }
         }
         Ok(Action::NoOp)
     }
