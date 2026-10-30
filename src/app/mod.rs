@@ -33,6 +33,7 @@ use crate::{
 
 pub struct Redraw(pub bool);
 
+#[allow(unused)]
 pub struct EventHandled(pub bool);
 
 static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =

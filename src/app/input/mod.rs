@@ -151,6 +151,7 @@ enum KeyMapAction {
 }
 
 impl KeyMapAction {
+    #[allow(unused)]
     fn to_string(&self) -> String {
         match self {
             KeyMapAction::Action(action) => format!("{:?}", action),
@@ -241,6 +242,7 @@ impl KeyMap {
         bindings
     }
 
+    #[allow(unused)]
     pub fn to_string(&self) -> String {
         let mut lines: Vec<String> = Vec::new();
         for (input, action) in self.map.iter() {
