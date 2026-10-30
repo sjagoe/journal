@@ -1,5 +1,6 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 use git2::Repository;
+use input::{InputHandler, InputMode};
 use ratatui::{
     Frame,
     layout::{Constraint, Rect},
@@ -15,10 +16,14 @@ use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 mod actions;
 mod entries_page;
+mod input;
 mod pagination;
 
 use crate::{
-    app::{actions::Action, entries_page::{ActivePane, EntriesPage}},
+    app::{
+        actions::Action,
+        entries_page::{ActivePane, EntriesPage},
+    },
     config::Config,
     errors::{ErrorKind, JournalError},
     journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git},
@@ -35,34 +40,22 @@ static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
 static NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT: StaticFormatDescription =
     format_description!("-[day]_");
 
-trait SetText {
-    fn set_text(&mut self, text: &str);
-}
-
-impl SetText for ratin::InputField {
-    fn set_text(&mut self, text: &str) {
-        for char in text.chars() {
-            self.handle_key(KeyCode::Char(char));
-        }
-    }
-}
-
-#[derive(Debug)]
-enum AppMode {
-    Standard,
-    NewEntry,
-    ExportEntry,
-    Commit,
-    Error(JournalError),
-}
+// #[derive(Debug)]
+// enum AppMode {
+//     Standard,
+//     NewEntry,
+//     ExportEntry,
+//     Commit,
+//     Error(JournalError),
+// }
 
 pub struct App {
     config: Config,
     journal: Journal,
     entries_page: EntriesPage,
+    input_handler: InputHandler,
     height: u16,
-    mode: AppMode,
-    text_entry: Option<ratin::InputField>,
+    mode: InputMode,
     entry_exporter: Option<EntryExporter>,
 }
 
@@ -79,9 +72,9 @@ impl App {
             config: config.clone(),
             journal,
             entries_page,
+            input_handler: InputHandler::default(),
             height: 0,
-            mode: AppMode::Standard,
-            text_entry: None,
+            mode: InputMode::Ready,
             entry_exporter: None,
         };
         Ok(app)
@@ -150,18 +143,6 @@ impl App {
         }
     }
 
-    fn draw_text_input(&mut self, frame: &mut Frame) {
-        if let Some(ref mut text_entry) = self.text_entry {
-            let entry_area = centered_rect(
-                Constraint::Percentage(60),
-                Constraint::Length(3),
-                frame.area(),
-            );
-            frame.render_widget(Clear, entry_area);
-            text_entry.render(frame, entry_area);
-        }
-    }
-
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let title = Line::from(self.title());
 
@@ -178,13 +159,13 @@ impl App {
         self.set_height(viewport.height);
 
         match self.mode {
-            AppMode::Error(ref error) => self.display_error(frame, error),
-            AppMode::NewEntry | AppMode::Commit => self.draw_text_input(frame),
-            AppMode::ExportEntry => self.draw_export_progress(frame),
+            InputMode::Error(ref error) => self.display_error(frame, error),
+            InputMode::NewEntry | InputMode::Commit => self.input_handler.render_input(frame),
+            InputMode::ExportEntry => self.draw_export_progress(frame),
             _ => {}
         }
 
-        if let AppMode::Error(ref error) = self.mode {
+        if let InputMode::Error(ref error) = self.mode {
             self.display_error(frame, error);
         }
     }
@@ -354,173 +335,8 @@ impl App {
         Ok(())
     }
 
-    fn handle_standard_mode_event(&self, event: &KeyEvent) -> Result<Action, JournalError> {
-        let action = match event {
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => match event.code {
-                // C-x -> Exit
-                KeyCode::Char('x') => {
-                    Action::AppExit
-                }
-                // C-e -> Export
-                KeyCode::Char('e') => Action::ExportEntry,
-
-                // C-n -> Next item
-                KeyCode::Char('n') => Action::NavigateNext,
-                // C-p -> Previous item
-                KeyCode::Char('p') => Action::NavigatePrevious,
-                // C-v -> PgDn
-                KeyCode::Char('v') => Action::NavigatePageDown,
-                _ => Action::NoOp,
-            },
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                ..
-            } => match event.code {
-                // M-v -> PgUp
-                KeyCode::Char('v') => Action::NavigatePageUp,
-
-                // M-n -> New Entry
-                KeyCode::Char('n') => Action::NameNewEntry,
-
-                // M-s for stage file to index
-                KeyCode::Char('s') => Action::GitStageFile,
-
-                // M-u for unstage file to index
-                KeyCode::Char('u') => Action::GitUnstageFile,
-
-                // M-c for commit staged changes
-                KeyCode::Char('c') => Action::GitCommitMessage,
-
-                _ => Action::NoOp,
-            },
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => match event.code {
-                KeyCode::Enter => Action::ActivateSelectedEntry,
-
-                KeyCode::Home => Action::NavigateFirst,
-                KeyCode::End => Action::NavigateLast,
-                KeyCode::PageUp => Action::NavigatePageUp,
-                KeyCode::PageDown => Action::NavigatePageDown,
-                KeyCode::Down => Action::NavigateNext,
-                KeyCode::Up => Action::NavigatePrevious,
-                KeyCode::Tab => Action::NavigateSwitchPane,
-                // Pressing g wil refresh the view from repository
-                KeyCode::Char('g') => Action::Refresh,
-                _ => Action::NoOp,
-            },
-            _ => Action::NoOp,
-        };
-        Ok(action)
-    }
-
-    fn get_entered_text(&self) -> Result<String, JournalError> {
-        if let Some(ref text_entry) = self.text_entry {
-            Ok(text_entry.get_text().to_owned())
-        } else {
-            Err(JournalError::Error(ErrorKind::TextEntryFailed))
-        }
-    }
-
-    fn event_to_action(&self, event: &KeyEvent) -> Result<Action, JournalError> {
-        match self.mode {
-            AppMode::Standard => {
-                return self.handle_standard_mode_event(event);
-            }
-            AppMode::NewEntry | AppMode::Commit => {
-                match event {
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Enter,
-                        ..
-                    } => {
-                        match self.get_entered_text() {
-                            Ok(text) => {
-                                // fixme validation for both input kinds
-                                // Missing ErrorKind::Commit
-                                let _ = self.get_entered_text().map_err(|err| match err {
-                                    JournalError::Error(e) => {
-                                        JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntry, e])
-                                    }
-                                })?;
-
-                                match self.mode {
-                                    AppMode::NewEntry => return Ok(Action::CreateEntry(text)),
-                                    AppMode::Commit => return Ok(Action::GitPerformCommit(text)),
-                                    _ => {}
-                                }
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Home
-                            | KeyCode::End
-                            | KeyCode::Delete
-                            | KeyCode::Backspace,
-                        ..
-                    } => return Ok(Action::TextEntry(event.code)),
-                    KeyEvent {
-                        modifiers: KeyModifiers::SHIFT,
-                        code: KeyCode::Char(_),
-                        ..
-                    } => {
-                        return Ok(Action::TextEntry(event.code));
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::NONE,
-                        code: KeyCode::Char(_),
-                        ..
-                    } => {
-                        return Ok(Action::TextEntry(event.code));
-                    }
-                    KeyEvent {
-                        modifiers: KeyModifiers::CONTROL,
-                        code: KeyCode::Char('g'),
-                        ..
-                    } => return Ok(Action::NavigateBack),
-                    KeyEvent {
-                        modifiers: KeyModifiers::CONTROL,
-                        code: KeyCode::Char('x'),
-                        ..
-                    } => {
-                        let text = self.get_entered_text()?;
-                        if text.is_empty() {
-                            return Ok(Action::NavigateBack);
-                        } else {
-                            return Ok(Action::ClearTextEntry);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            AppMode::ExportEntry => {}
-            AppMode::Error(_) => match event {
-                KeyEvent {
-                    modifiers: KeyModifiers::NONE,
-                    code: KeyCode::Enter,
-                    ..
-                }
-                | KeyEvent {
-                    modifiers: KeyModifiers::CONTROL,
-                    code: KeyCode::Char('g') | KeyCode::Char('x'),
-                    ..
-                } => {
-                    return Ok(Action::NavigateBack);
-                }
-                _ => {}
-            },
-        }
-        Ok(Action::NoOp)
-    }
-
     pub fn handle_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
-        let action = self.event_to_action(event)?;
+        let action = self.input_handler.action(&self.mode, event)?;
 
         let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
 
@@ -534,7 +350,7 @@ impl App {
                     let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
                     self.entry_exporter = Some(entry_exporter);
                     self.begin_export_entry()?;
-                    self.mode = AppMode::ExportEntry;
+                    self.mode = InputMode::ExportEntry;
                     return Ok(Redraw(false));
                 }
             }
@@ -552,17 +368,20 @@ impl App {
                         self.new_entry(&EntryKind::General, &default_name)?;
                     }
                     ActivePane::Narrative => {
-                        let name_suffix = now.format(NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT).map_err(|_| {
-                            JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
-                        })?;
+                        let name_suffix = now
+                            .format(NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT)
+                            .map_err(|_| {
+                                JournalError::chain(&[
+                                    ErrorKind::NewEntry,
+                                    ErrorKind::FormatDateTime,
+                                ])
+                            })?;
                         let name_prefix = format!("{}{}", &default_name, &name_suffix);
 
-                        let mut text_entry = ratin::InputField::new()
-                            .with_placeholder("New entry name ...")
-                            .with_max_length(50);
-                        text_entry.set_text(&name_prefix);
-                        self.text_entry = Some(text_entry);
-                        self.mode = AppMode::NewEntry;
+                        self.input_handler
+                            .prepare_entry("New entry name ...", Some(&name_prefix));
+
+                        self.mode = InputMode::NewEntry;
                     }
                 }
                 return Ok(Redraw(true));
@@ -576,13 +395,13 @@ impl App {
                         ErrorKind::TextEntryFailed,
                     ]))
                 };
-                self.mode = AppMode::Standard;
+                self.mode = InputMode::Ready;
                 // fixme need actial validation
                 if entry_name.is_empty() {
                     return err();
                 }
                 self.new_entry(&EntryKind::Narrative, &entry_name)?;
-                self.text_entry = None;
+
                 return Ok(Redraw(true));
             }
 
@@ -607,8 +426,7 @@ impl App {
             Action::NavigateLast => page.end(),
             Action::NavigateSwitchPane => page.switch_pane(),
             Action::NavigateBack => {
-                self.mode = AppMode::Standard;
-                self.text_entry = None;
+                self.mode = InputMode::Ready;
                 return Ok(Redraw(true));
             }
 
@@ -627,11 +445,8 @@ impl App {
             }
 
             Action::GitCommitMessage => {
-                let text_entry = ratin::InputField::new()
-                    .with_placeholder("Commit message ...")
-                    .with_max_length(120);
-                self.text_entry = Some(text_entry);
-                self.mode = AppMode::Commit;
+                self.input_handler.prepare_entry("Commit message ...", None);
+                self.mode = InputMode::Commit;
             }
 
             Action::GitPerformCommit(ref commit_message) => {
@@ -642,37 +457,20 @@ impl App {
                         ErrorKind::TextEntryFailed,
                     ]))
                 };
-                self.mode = AppMode::Standard;
+                self.mode = InputMode::Ready;
                 // fixme need actial validation
                 if commit_message.is_empty() {
                     return err();
                 }
                 self.git_commit(&commit_message)?;
-                self.text_entry = None;
                 return Ok(Redraw(true));
             }
 
             Action::TextEntry(ref keycode) => {
-                if let Some(ref mut text_entry) = self.text_entry {
-                    text_entry.handle_key(*keycode);
-                } else {
-                    return Err(JournalError::chain(&[
-                        ErrorKind::InvalidMode,
-                        ErrorKind::NewEntry,
-                        ErrorKind::TextEntryFailed,
-                    ]));
-                }
+                self.input_handler.handle_text_entry(keycode)?;
             }
             Action::ClearTextEntry => {
-                if let Some(ref mut text_entry) = self.text_entry {
-                    text_entry.clear();
-                } else {
-                    return Err(JournalError::chain(&[
-                        ErrorKind::InvalidMode,
-                        ErrorKind::NewEntry,
-                        ErrorKind::TextEntryFailed,
-                    ]));
-                }
+                self.input_handler.clear_text_entry()?;
             }
 
             Action::NoOp => {}
@@ -682,18 +480,18 @@ impl App {
     }
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<Redraw, JournalError> {
-        if let AppMode::ExportEntry = self.mode
+        if let InputMode::ExportEntry = self.mode
             && let Some(ref mut exporter) = self.entry_exporter
         {
             match exporter.tick(tick_duration) {
                 Ok(export_complete) => {
                     if export_complete {
-                        self.mode = AppMode::Standard;
+                        self.mode = InputMode::Ready;
                         self.entry_exporter = None;
                     }
                 }
                 Err(e) => {
-                    self.mode = AppMode::Standard;
+                    self.mode = InputMode::Ready;
                     self.entry_exporter = None;
                     return Err(e);
                 }
@@ -703,6 +501,6 @@ impl App {
     }
 
     pub fn error(&mut self, error: JournalError) {
-        self.mode = AppMode::Error(error);
+        self.mode = InputMode::Error(error);
     }
 }
