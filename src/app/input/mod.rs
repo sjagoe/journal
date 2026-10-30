@@ -23,18 +23,97 @@ impl SetText for ratin::InputField {
     }
 }
 
-#[derive(Default, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub(super) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
 }
 
 impl InputChain {
+    fn to_string(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        for input in self.prior_inputs.iter() {
+            let mut input_str: Vec<String> = Vec::new();
+            match input.modifiers {
+                KeyModifiers::CONTROL => input_str.push("C-".to_string()),
+                KeyModifiers::ALT => input_str.push("M-".to_string()),
+                _ => {}
+            }
+            match input.code {
+                KeyCode::Enter => input_str.push("Enter".to_string()),
+                KeyCode::Home => input_str.push("Home".to_string()),
+                KeyCode::End => input_str.push("End".to_string()),
+                KeyCode::PageUp => input_str.push("PageUp".to_string()),
+                KeyCode::PageDown => input_str.push("PageDown".to_string()),
+                KeyCode::Up => input_str.push("Up".to_string()),
+                KeyCode::Down => input_str.push("Down".to_string()),
+                KeyCode::Tab => input_str.push("Tab".to_string()),
+                KeyCode::Char(c) => input_str.push(c.to_string()),
+                _ => {}
+            }
+            parts.push(input_str.join(""));
+        }
+        parts.join(" ")
+    }
+
+    fn to_owned(&self) -> InputChain {
+        InputChain {
+            prior_inputs: self.prior_inputs.to_owned(),
+        }
+    }
+
+    fn from_vec(inputs: &Vec<KeyEvent>) -> InputChain {
+        InputChain {
+            prior_inputs: inputs.to_owned(),
+        }
+    }
+
     fn chain(&self, next: &KeyEvent) -> InputChain {
         let mut inputs: Vec<KeyEvent> = self.prior_inputs.to_owned();
         inputs.push(*next);
         InputChain {
             prior_inputs: inputs,
         }
+    }
+
+    fn get_chain(&self) -> Vec<(InputChain, Option<InputChain>)> {
+        // ["C-x", "C-c"] -> [InputChain(["C-x"]), InputChain(["C-x", "C-a"])]
+
+        let mut inputs: Vec<KeyEvent> = Vec::new();
+        let mut chain1: Vec<InputChain> = Vec::new();
+        let mut chain2: Vec<Option<InputChain>> = Vec::new();
+
+        for event in self.prior_inputs.iter() {
+            inputs.push(*event);
+            if !chain1.is_empty() {
+                chain2.push(Some(InputChain::from_vec(&inputs)));
+            }
+            chain1.push(InputChain::from_vec(&inputs));
+        }
+        chain2.push(None);
+
+        // if let Some(final_input) = last_input {
+        //     chain.push((final_input.clone(), None));
+        // }
+        let mut chain: Vec<(InputChain, Option<InputChain>)> = Vec::new();
+
+        for (a, b) in std::iter::zip(chain1, chain2) {
+            chain.push((a, b));
+        }
+
+        chain
+
+        // // let chain: Vec<InputChain> = Vec::new();
+
+        // // let mut last_input: Option<InputChain> = None;
+
+        // // for input in self.prior_inputs.iter() {
+        // //     let input_chain = InputChain::from_vec();
+        // //     inputs.insert(input.to_owned(), input_chain);
+        // //     last_input = input_chain;
+        // // }
+
+        // // chain
+        // vec![]
     }
 }
 
@@ -64,9 +143,31 @@ impl From<&KeyEvent> for InputChain {
     }
 }
 
+#[derive(Debug)]
+enum KeyMapAction {
+    Action(Action),
+    Input(InputChain),
+}
 
-type KeyMapType = HashMap<InputChain, Action>;
+impl KeyMapAction {
+    fn to_string(&self) -> String {
+        match self {
+            KeyMapAction::Action(action) => format!("{:?}", action),
+            KeyMapAction::Input(input) => input.to_string(),
+        }
+    }
 
+    fn to_owned(&self) -> KeyMapAction {
+        match self {
+            KeyMapAction::Action(action) => KeyMapAction::Action(action.clone()),
+            KeyMapAction::Input(input) => KeyMapAction::Input(input.to_owned()),
+        }
+    }
+}
+
+type KeyMapType = HashMap<InputChain, KeyMapAction>;
+
+#[derive(Debug)]
 struct KeyMap {
     map: KeyMapType,
 }
@@ -112,12 +213,9 @@ fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
             character.as_str().chars().next().unwrap()
         } else {
             let msg = format!("Unable to parse keymap character: {:?}", value);
-            return Err(JournalError::Error(ErrorKind::Wrapped(msg)))
+            return Err(JournalError::Error(ErrorKind::Wrapped(msg)));
         };
-        let event = make_event(
-            modifier,
-            KeyCode::Char(character),
-        );
+        let event = make_event(modifier, KeyCode::Char(character));
         Ok(event)
     } else {
         let msg = format!("Unable to parse keymap: {:?}", value);
@@ -126,33 +224,42 @@ fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
 }
 
 impl KeyMap {
-    fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
-        let mut keys: KeyMapType = HashMap::new();
-
-        for (keyseq, action_name) in mapconfig.iter() {
-            let input = InputChain::from_str(&keyseq)?;
-            let action = Action::from_str(&action_name)?;
-            keys.insert(input, action);
+    pub fn to_string(&self) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        for (input, action) in self.map.iter() {
+            let line = format!("{}: {}", input.to_string(), action.to_string());
+            lines.push(line);
         }
-
-        let map = KeyMap {
-            map: keys,
-        };
-        Ok(map)
+        lines.join("\n")
     }
 
-    pub(self) fn action(&self, input: &InputChain) -> Result<Action, JournalError> {
+    // fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
+    //     let mut keys: KeyMapType = HashMap::new();
+
+    //     for (keyseq, action_name) in mapconfig.iter() {
+    //         let input = InputChain::from_str(&keyseq)?;
+    //         let action = Action::from_str(&action_name)?;
+    //         keys.insert(input, action);
+    //     }
+
+    //     let map = KeyMap {
+    //         map: keys,
+    //     };
+    //     Ok(map)
+    // }
+
+    pub(self) fn action(&self, input: &InputChain) -> KeyMapAction {
         if let Some(action) = self.map.get(input) {
-            Ok(action.clone())
+            action.to_owned()
         } else {
-            Ok(Action::NoOp)
+            KeyMapAction::Action(Action::NoOp)
         }
     }
 }
 
 const DEFAULT_KEYS: [(&str, Action); 19] = [
-    ("C-x", Action::AppExit),
-    ("C-e", Action::ExportEntry),
+    ("C-x C-c", Action::AppExit),
+    ("C-u C-e", Action::ExportEntry),
     ("C-n", Action::NavigateNext),
     ("C-p", Action::NavigatePrevious),
     ("C-v", Action::NavigatePageDown),
@@ -177,16 +284,22 @@ impl Default for KeyMap {
         let mut keys: KeyMapType = HashMap::new();
 
         for (keyseq, action) in DEFAULT_KEYS {
-            let input = InputChain::from_str(&keyseq).unwrap();
-            keys.insert(input, action);
+            let input_chain = InputChain::from_str(&keyseq).unwrap();
+            for (input, next_input) in input_chain.get_chain().iter() {
+                if let Some(next_input) = next_input {
+                    let next = KeyMapAction::Input(next_input.to_owned());
+                    keys.insert(input.to_owned(), next);
+                } else {
+                    keys.insert(input.to_owned(), KeyMapAction::Action(action.clone()));
+                }
+            }
         }
 
-        KeyMap {
-            map: keys,
-        }
+        KeyMap { map: keys }
     }
 }
 
+#[derive(Debug, Clone)]
 pub(super) enum InputMode {
     Ready,
     ChainedInput(InputChain),
@@ -203,6 +316,10 @@ pub(super) struct InputHandler {
 }
 
 impl InputHandler {
+    pub fn debug(&self) {
+        println!("{}", self.key_map.to_string());
+    }
+
     fn get_entered_text(&self) -> Result<String, JournalError> {
         if let Some(ref text_entry) = self.text_entry {
             Ok(text_entry.get_text().to_owned())
@@ -211,9 +328,14 @@ impl InputHandler {
         }
     }
 
-    fn handle_standard_mode_event(&self, event: &KeyEvent) -> Result<Action, JournalError> {
-        let input = InputChain::from(event);
-        return self.key_map.action(&input);
+    fn handle_chained_input(&self, input: &InputChain) -> Action {
+        match self.key_map.action(&input) {
+            KeyMapAction::Action(action) => match action {
+                Action::NoOp => Action::NextMode(InputMode::Ready),
+                _ => action,
+            },
+            KeyMapAction::Input(_) => Action::NextMode(InputMode::ChainedInput(input.clone())),
+        }
     }
 
     pub(super) fn action(
@@ -223,7 +345,8 @@ impl InputHandler {
     ) -> Result<Action, JournalError> {
         match mode {
             InputMode::Ready => {
-                return self.handle_standard_mode_event(event);
+                let input = InputChain::from(event);
+                return Ok(self.handle_chained_input(&input));
             }
             InputMode::NewEntry | InputMode::Commit => {
                 match event {
@@ -308,7 +431,10 @@ impl InputHandler {
                 }
                 _ => {}
             },
-            InputMode::ChainedInput(_) => {}
+            InputMode::ChainedInput(input) => {
+                let next_input = input.chain(event);
+                return Ok(self.handle_chained_input(&next_input));
+            }
         }
         Ok(Action::NoOp)
     }

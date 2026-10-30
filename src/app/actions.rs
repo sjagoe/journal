@@ -1,9 +1,10 @@
 use std::str::FromStr;
 
-use Action::ExportEntry;
 use crossterm::event::KeyCode;
 
 use crate::errors::{ErrorKind, JournalError};
+
+use super::InputMode;
 
 #[derive(Clone, Debug)]
 pub(super) enum Action {
@@ -33,6 +34,8 @@ pub(super) enum Action {
 
     TextEntry(KeyCode),
     ClearTextEntry,
+
+    NextMode(InputMode),
 
     NoOp,
 }
@@ -65,7 +68,11 @@ impl FromStr for Action {
 
             "ClearTextEntry" => Action::ClearTextEntry,
 
-            _ => return Err(JournalError::Error(ErrorKind::Wrapped("fixme failed to convert action".to_string()))),
+            _ => {
+                return Err(JournalError::Error(ErrorKind::Wrapped(
+                    "fixme failed to convert action".to_string(),
+                )));
+            }
         };
         Ok(result)
     }

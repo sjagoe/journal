@@ -66,13 +66,16 @@ impl App {
             Err(e) => panic!("failed to open: {}", e),
         };
 
+        let input_handler = InputHandler::default();
+        input_handler.debug();
+
         let journal = Journal::from_file(&config.journal_path, &repo);
         let entries_page = EntriesPage::new(&journal);
         let app = App {
             config: config.clone(),
             journal,
             entries_page,
-            input_handler: InputHandler::default(),
+            input_handler,
             height: 0,
             mode: InputMode::Ready,
             entry_exporter: None,
@@ -471,6 +474,10 @@ impl App {
             }
             Action::ClearTextEntry => {
                 self.input_handler.clear_text_entry()?;
+            }
+
+            Action::NextMode(mode) => {
+                self.mode = mode;
             }
 
             Action::NoOp => {}
