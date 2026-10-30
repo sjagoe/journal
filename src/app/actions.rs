@@ -6,7 +6,7 @@ use crate::errors::{ErrorKind, JournalError};
 
 use super::InputMode;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) enum Action {
     AppExit,
     DisplayError(JournalError),

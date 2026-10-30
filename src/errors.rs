@@ -26,7 +26,7 @@ pub fn install_hooks() -> color_eyre::Result<()> {
     Ok(())
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum JournalError {
     Error(ErrorKind),
 }

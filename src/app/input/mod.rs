@@ -144,7 +144,7 @@ impl From<&KeyEvent> for InputChain {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 enum KeyMapAction {
     Action(Action),
     Input(InputChain),
@@ -168,10 +168,12 @@ impl KeyMapAction {
 }
 
 type KeyMapType = HashMap<InputChain, KeyMapAction>;
+type KeyMapReverseType = HashMap<KeyMapAction, InputChain>;
 
 #[derive(Debug)]
 struct KeyMap {
     map: KeyMapType,
+    reverse: KeyMapReverseType,
 }
 
 fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
@@ -252,20 +254,37 @@ impl KeyMap {
         lines.join("\n")
     }
 
-    // fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
-    //     let mut keys: KeyMapType = HashMap::new();
+    fn add_keymap(keys: &mut KeyMapType, reverse: &mut KeyMapReverseType, input: &InputChain, action: &Action) {
+        for (input, next_input) in input.get_chain().iter() {
+            if let Some(next_input) = next_input {
+                let next = KeyMapAction::Input(next_input.to_owned());
+                keys.insert(input.to_owned(), next);
+            } else {
+                let map_action = KeyMapAction::Action(action.clone());
+                keys.insert(input.to_owned(), map_action.to_owned());
+                if !reverse.contains_key(&map_action) {
+                    reverse.insert(map_action, input.to_owned());
+                }
+            }
+        }
+    }
 
-    //     for (keyseq, action_name) in mapconfig.iter() {
-    //         let input = InputChain::from_str(&keyseq)?;
-    //         let action = Action::from_str(&action_name)?;
-    //         keys.insert(input, action);
-    //     }
+    fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
+        let mut keys: KeyMapType = HashMap::new();
+        let mut reverse: KeyMapReverseType = HashMap::new();
 
-    //     let map = KeyMap {
-    //         map: keys,
-    //     };
-    //     Ok(map)
-    // }
+        for (keyseq, action_name) in mapconfig.iter() {
+            let input_chain = InputChain::from_str(&keyseq)?;
+            let action = Action::from_str(&action_name)?;
+            Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
+        }
+
+        let map = KeyMap {
+            map: keys,
+            reverse,
+        };
+        Ok(map)
+    }
 
     pub(self) fn action(&self, input: &InputChain) -> KeyMapAction {
         if let Some(action) = self.map.get(input) {
@@ -301,24 +320,18 @@ const DEFAULT_KEYS: [(&str, Action); 19] = [
 impl Default for KeyMap {
     fn default() -> Self {
         let mut keys: KeyMapType = HashMap::new();
+        let mut reverse: KeyMapReverseType = HashMap::new();
 
         for (keyseq, action) in DEFAULT_KEYS {
             let input_chain = InputChain::from_str(&keyseq).unwrap();
-            for (input, next_input) in input_chain.get_chain().iter() {
-                if let Some(next_input) = next_input {
-                    let next = KeyMapAction::Input(next_input.to_owned());
-                    keys.insert(input.to_owned(), next);
-                } else {
-                    keys.insert(input.to_owned(), KeyMapAction::Action(action.clone()));
-                }
-            }
+            Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        KeyMap { map: keys }
+        KeyMap { map: keys, reverse }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) enum InputMode {
     Ready,
     ChainedInput(InputChain),
