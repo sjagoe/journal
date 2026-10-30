@@ -40,6 +40,44 @@ pub(super) enum Action {
     NoOp,
 }
 
+impl ToString for Action {
+    fn to_string(&self) -> String {
+        let result = match self {
+            Action::AppExit => "AppExit",
+
+            Action::ExportEntry => "ExportEntry",
+            Action::NameNewEntry => "NameNewEntry",
+            Action::ActivateSelectedEntry => "ActivateSelectedEntry",
+
+            Action::Refresh => "Refresh",
+
+            Action::NavigateNext => "NavigateNext",
+            Action::NavigatePrevious => "NavigatePrevious",
+            Action::NavigatePageUp => "NavigatePageUp",
+            Action::NavigatePageDown => "NavigatePageDown",
+            Action::NavigateFirst => "NavigateFirst",
+            Action::NavigateLast => "NavigateLast",
+            Action::NavigateSwitchPane => "NavigateSwitchPane",
+            Action::NavigateBack => "NavigateBack",
+
+            Action::GitStageFile => "GitStageFile",
+            Action::GitUnstageFile => "GitUnstageFile",
+            Action::GitCommitMessage => "GitCommitMessage",
+
+            Action::ClearTextEntry => "ClearTextEntry",
+
+            Action::DisplayError(_) => "DisplayError",
+            Action::CreateEntry(_) => "CreateEntry",
+            Action::GitPerformCommit(_) => "GitPerformCommit",
+            Action::TextEntry(_) => "TextEntry",
+            Action::NextMode(_) => "NextMode",
+
+            Action::NoOp => "NoOp",
+        };
+        result.to_string()
+    }
+}
+
 impl FromStr for Action {
     type Err = JournalError;
 

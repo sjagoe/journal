@@ -3,7 +3,7 @@ use git2::Repository;
 use input::{InputHandler, InputMode};
 use ratatui::{
     Frame,
-    layout::{Constraint, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     prelude::Modifier,
     style::{Color, Style},
     symbols,
@@ -40,15 +40,6 @@ static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
 static NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT: StaticFormatDescription =
     format_description!("-[day]_");
 
-// #[derive(Debug)]
-// enum AppMode {
-//     Standard,
-//     NewEntry,
-//     ExportEntry,
-//     Commit,
-//     Error(JournalError),
-// }
-
 pub struct App {
     config: Config,
     journal: Journal,
@@ -67,7 +58,6 @@ impl App {
         };
 
         let input_handler = InputHandler::default();
-        input_handler.debug();
 
         let journal = Journal::from_file(&config.journal_path, &repo);
         let entries_page = EntriesPage::new(&journal);
@@ -147,8 +137,12 @@ impl App {
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
-        let title = Line::from(self.title());
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(15), Constraint::Length(5)]);
+        let [content_area, keys_area] = layout.areas(area);
 
+        let title = Line::from(self.title());
         let content_block = Block::default()
             .padding(Padding::horizontal(0))
             .borders(Borders::TOP)
@@ -157,9 +151,16 @@ impl App {
             .title(title);
 
         let page = Box::<&dyn Drawable>::new(&self.entries_page);
-        let viewport = page.draw(frame, area, content_block, &self.journal);
+        let content_viewport = page.draw(frame, content_area, content_block, &self.journal);
 
-        self.set_height(viewport.height);
+        self.set_height(content_viewport.height);
+
+        let keys_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::NONE)
+            .style(Style::default());
+        self.input_handler
+            .draw(frame, keys_area, keys_block, &self.mode);
 
         match self.mode {
             InputMode::Error(ref error) => self.display_error(frame, error),

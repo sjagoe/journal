@@ -1,7 +1,12 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, str::FromStr};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use ratatui::{Frame, layout::Constraint, widgets::Clear};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    text::{Line, Span},
+    widgets::{Block, Clear, Row, Table},
+};
 use regex::Regex;
 
 use crate::{
@@ -28,7 +33,19 @@ pub(super) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
 }
 
-impl InputChain {
+impl PartialOrd for InputChain {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.to_string().cmp(&other.to_string()))
+    }
+}
+
+impl Ord for InputChain {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.to_string().cmp(&other.to_string())
+    }
+}
+
+impl ToString for InputChain {
     fn to_string(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
         for input in self.prior_inputs.iter() {
@@ -54,7 +71,9 @@ impl InputChain {
         }
         parts.join(" ")
     }
+}
 
+impl InputChain {
     fn to_owned(&self) -> InputChain {
         InputChain {
             prior_inputs: self.prior_inputs.to_owned(),
@@ -76,8 +95,6 @@ impl InputChain {
     }
 
     fn get_chain(&self) -> Vec<(InputChain, Option<InputChain>)> {
-        // ["C-x", "C-c"] -> [InputChain(["C-x"]), InputChain(["C-x", "C-a"])]
-
         let mut inputs: Vec<KeyEvent> = Vec::new();
         let mut chain1: Vec<InputChain> = Vec::new();
         let mut chain2: Vec<Option<InputChain>> = Vec::new();
@@ -91,9 +108,6 @@ impl InputChain {
         }
         chain2.push(None);
 
-        // if let Some(final_input) = last_input {
-        //     chain.push((final_input.clone(), None));
-        // }
         let mut chain: Vec<(InputChain, Option<InputChain>)> = Vec::new();
 
         for (a, b) in std::iter::zip(chain1, chain2) {
@@ -101,19 +115,6 @@ impl InputChain {
         }
 
         chain
-
-        // // let chain: Vec<InputChain> = Vec::new();
-
-        // // let mut last_input: Option<InputChain> = None;
-
-        // // for input in self.prior_inputs.iter() {
-        // //     let input_chain = InputChain::from_vec();
-        // //     inputs.insert(input.to_owned(), input_chain);
-        // //     last_input = input_chain;
-        // // }
-
-        // // chain
-        // vec![]
     }
 }
 
@@ -224,6 +225,22 @@ fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
 }
 
 impl KeyMap {
+    pub fn keybindings(&self) -> Vec<String> {
+        let mut bindings: Vec<String> = Vec::new();
+
+        for (binding, key_action) in self.map.iter() {
+            if let KeyMapAction::Action(action) = key_action {
+                let binding_str = binding.to_string();
+                if binding_str.starts_with("C-") || binding_str.starts_with("M-") {
+                    bindings.push(format!("{}: {}", binding_str, action.to_string()));
+                }
+            }
+        }
+
+        bindings.sort();
+        bindings
+    }
+
     pub fn to_string(&self) -> String {
         let mut lines: Vec<String> = Vec::new();
         for (input, action) in self.map.iter() {
@@ -259,7 +276,7 @@ impl KeyMap {
 
 const DEFAULT_KEYS: [(&str, Action); 19] = [
     ("C-x C-c", Action::AppExit),
-    ("C-u C-e", Action::ExportEntry),
+    ("C-u C-u C-e", Action::ExportEntry),
     ("C-n", Action::NavigateNext),
     ("C-p", Action::NavigatePrevious),
     ("C-v", Action::NavigatePageDown),
@@ -316,8 +333,44 @@ pub(super) struct InputHandler {
 }
 
 impl InputHandler {
-    pub fn debug(&self) {
-        println!("{}", self.key_map.to_string());
+    pub fn draw(&self, frame: &mut Frame, area: Rect, block: Block, mode: &InputMode) {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(3), Constraint::Length(1)]);
+
+        let [hint_area, current_area] = layout.areas(area);
+
+        let mut rows: Vec<Row> = Vec::new();
+
+        let widths = [
+            Constraint::Min(5),
+            Constraint::Min(5),
+            Constraint::Min(5),
+            Constraint::Min(5),
+            Constraint::Min(5),
+        ];
+
+        match mode {
+            InputMode::Ready | InputMode::ChainedInput(_) => {
+                let bindings = &self.key_map.keybindings()[..];
+                for row in bindings.chunks(widths.len()) {
+                    let mut row_vec: Vec<String> = Vec::new();
+                    for item in row.iter() {
+                        row_vec.push(item.to_string());
+                    }
+                    rows.push(Row::new(row_vec));
+                }
+            }
+            _ => {}
+        }
+
+        let table = Table::default().rows(rows).widths(widths).block(block);
+        frame.render_widget(table, hint_area);
+
+        if let InputMode::ChainedInput(input) = mode {
+            let current_entry = Line::from(Span::from(input.to_string()));
+            frame.render_widget(current_entry, current_area);
+        }
     }
 
     fn get_entered_text(&self) -> Result<String, JournalError> {
