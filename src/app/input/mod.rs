@@ -291,6 +291,7 @@ impl KeyMap {
         }
     }
 
+    #[allow(unused)]
     fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
         let mut keys: KeyMapType = HashMap::new();
         let mut reverse: KeyMapReverseType = HashMap::new();
