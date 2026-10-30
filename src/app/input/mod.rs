@@ -173,7 +173,7 @@ type KeyMapReverseType = HashMap<KeyMapAction, InputChain>;
 #[derive(Debug)]
 struct KeyMap {
     map: KeyMapType,
-    _reverse: KeyMapReverseType,
+    reverse: KeyMapReverseType,
 }
 
 fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
@@ -231,16 +231,33 @@ impl KeyMap {
     pub fn keybindings(&self) -> Vec<String> {
         let mut bindings: Vec<String> = Vec::new();
 
-        for (binding, key_action) in self.map.iter() {
-            if let KeyMapAction::Action(action) = key_action {
+        for action in [
+            Action::AppExit,
+            Action::ExportEntry,
+            Action::NameNewEntry,
+            Action::ActivateSelectedEntry,
+            Action::Refresh,
+
+            Action::NavigateNext,
+            Action::NavigatePrevious,
+            Action::NavigatePageUp,
+            Action::NavigatePageDown,
+            Action::NavigateFirst,
+            Action::NavigateLast,
+            Action::NavigateSwitchPane,
+            Action::NavigateBack,
+
+            Action::GitStageFile,
+            Action::GitUnstageFile,
+            Action::GitCommitMessage,
+        ] {
+            let key_action = KeyMapAction::Action(action.clone());
+            if let Some(binding) = self.reverse.get(&key_action) {
                 let binding_str = binding.to_string();
-                if binding_str.starts_with("C-") || binding_str.starts_with("M-") {
-                    bindings.push(format!("{}: {}", binding_str, action.to_string()));
-                }
+                bindings.push(format!("{}: {}", binding_str, action.to_string()));
             }
         }
 
-        bindings.sort();
         bindings
     }
 
@@ -284,7 +301,7 @@ impl KeyMap {
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        let map = KeyMap { map: keys, _reverse: reverse };
+        let map = KeyMap { map: keys, reverse };
         Ok(map)
     }
 
@@ -330,7 +347,7 @@ impl Default for KeyMap {
             Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
         }
 
-        KeyMap { map: keys, _reverse: reverse }
+        KeyMap { map: keys, reverse }
     }
 }
 
