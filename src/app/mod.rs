@@ -13,11 +13,12 @@ use ratatui::{
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
+mod actions;
 mod entries_page;
 mod pagination;
 
 use crate::{
-    app::entries_page::{ActivePane, EntriesPage},
+    app::{actions::Action, entries_page::{ActivePane, EntriesPage}},
     config::Config,
     errors::{ErrorKind, JournalError},
     journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git},
@@ -353,284 +354,150 @@ impl App {
         Ok(())
     }
 
-    fn handle_standard_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
-        let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
-        match event {
+    fn handle_standard_mode_event(&self, event: &KeyEvent) -> Result<Action, JournalError> {
+        let action = match event {
             KeyEvent {
                 modifiers: KeyModifiers::CONTROL,
                 ..
             } => match event.code {
                 // C-x -> Exit
                 KeyCode::Char('x') => {
-                    return Err(JournalError::Error(ErrorKind::AppExit));
+                    Action::AppExit
                 }
                 // C-e -> Export
-                KeyCode::Char('e') => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
-                        self.entry_exporter = Some(entry_exporter);
-                        self.begin_export_entry()?;
-                        self.mode = AppMode::ExportEntry;
-                        return Ok(Redraw(false));
-                    }
-                }
+                KeyCode::Char('e') => Action::ExportEntry,
+
                 // C-n -> Next item
-                KeyCode::Char('n') => page.next_selection(),
+                KeyCode::Char('n') => Action::NavigateNext,
                 // C-p -> Previous item
-                KeyCode::Char('p') => page.previous_selection(),
+                KeyCode::Char('p') => Action::NavigatePrevious,
                 // C-v -> PgDn
-                KeyCode::Char('v') => page.pagedown(self.height),
-                _ => {}
+                KeyCode::Char('v') => Action::NavigatePageDown,
+                _ => Action::NoOp,
             },
             KeyEvent {
                 modifiers: KeyModifiers::ALT,
                 ..
             } => match event.code {
                 // M-v -> PgUp
-                KeyCode::Char('v') => page.pageup(self.height),
+                KeyCode::Char('v') => Action::NavigatePageUp,
+
                 // M-n -> New Entry
-                KeyCode::Char('n') => {
-                    let now = OffsetDateTime::now_local().map_err(|_| {
-                        JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
-                    })?;
-                    let default_name = now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
-                        JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
-                    })?;
+                KeyCode::Char('n') => Action::NameNewEntry,
 
-                    match self.entries_page.active_pane {
-                        ActivePane::General => {
-                            self.new_entry(&EntryKind::General, &default_name)?;
-                        }
-                        ActivePane::Narrative => {
-                            let name_suffix = now.format(NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT).map_err(|_| {
-                                JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
-                            })?;
-                            let name_prefix = format!("{}{}", &default_name, &name_suffix);
-
-                            let mut text_entry = ratin::InputField::new()
-                                .with_placeholder("New entry name ...")
-                                .with_max_length(50);
-                            text_entry.set_text(&name_prefix);
-                            self.text_entry = Some(text_entry);
-                            self.mode = AppMode::NewEntry;
-                        }
-                    }
-                    return Ok(Redraw(true));
-                }
                 // M-s for stage file to index
-                KeyCode::Char('s') => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.git_add_entry(&entry_kind, &entry)?;
-                    }
-                }
+                KeyCode::Char('s') => Action::GitStageFile,
+
                 // M-u for unstage file to index
-                KeyCode::Char('u') => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.git_remove_entry(&entry_kind, &entry)?;
-                    }
-                }
+                KeyCode::Char('u') => Action::GitUnstageFile,
+
                 // M-c for commit staged changes
-                KeyCode::Char('c') => {
-                    let text_entry = ratin::InputField::new()
-                        .with_placeholder("Commit message ...")
-                        .with_max_length(120);
-                    self.text_entry = Some(text_entry);
-                    self.mode = AppMode::Commit;
-                }
-                _ => {}
+                KeyCode::Char('c') => Action::GitCommitMessage,
+
+                _ => Action::NoOp,
             },
             KeyEvent {
                 modifiers: KeyModifiers::NONE,
                 ..
             } => match event.code {
-                KeyCode::Enter => {
-                    if let Some(entry) = page.select(&self.journal) {
-                        let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                        self.edit_existing_entry(&entry_kind, &entry)?;
-                    }
-                    return Ok(Redraw(true));
-                }
-                KeyCode::Home => page.home(),
-                KeyCode::End => page.end(),
-                KeyCode::PageUp => page.pageup(self.height),
-                KeyCode::PageDown => page.pagedown(self.height),
-                KeyCode::Down => page.next_selection(),
-                KeyCode::Up => page.previous_selection(),
-                KeyCode::Tab => page.switch_pane(),
+                KeyCode::Enter => Action::ActivateSelectedEntry,
+
+                KeyCode::Home => Action::NavigateFirst,
+                KeyCode::End => Action::NavigateLast,
+                KeyCode::PageUp => Action::NavigatePageUp,
+                KeyCode::PageDown => Action::NavigatePageDown,
+                KeyCode::Down => Action::NavigateNext,
+                KeyCode::Up => Action::NavigatePrevious,
+                KeyCode::Tab => Action::NavigateSwitchPane,
                 // Pressing g wil refresh the view from repository
-                KeyCode::Char('g') => {
-                    self.refresh()?;
-                    return Ok(Redraw(true));
-                }
-                _ => {}
+                KeyCode::Char('g') => Action::Refresh,
+                _ => Action::NoOp,
             },
-            _ => {}
+            _ => Action::NoOp,
         };
-        Ok(Redraw(false))
+        Ok(action)
     }
 
-    fn get_entered_text(&mut self) -> Result<String, JournalError> {
-        if let Some(ref mut text_entry) = self.text_entry {
+    fn get_entered_text(&self) -> Result<String, JournalError> {
+        if let Some(ref text_entry) = self.text_entry {
             Ok(text_entry.get_text().to_owned())
         } else {
             Err(JournalError::Error(ErrorKind::TextEntryFailed))
         }
     }
 
-    fn handle_text_entry_event(
-        &mut self,
-        event: &KeyEvent,
-    ) -> Result<(EventHandled, Redraw), JournalError> {
-        let mut send_text_entry = || -> Result<(EventHandled, Redraw), JournalError> {
-            if let Some(ref mut text_entry) = self.text_entry {
-                text_entry.handle_key(event.code);
-            } else {
-                return Err(JournalError::chain(&[
-                    ErrorKind::InvalidMode,
-                    ErrorKind::NewEntry,
-                    ErrorKind::TextEntryFailed,
-                ]));
-            }
-            Ok((EventHandled(true), Redraw(false)))
-        };
-        match event {
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => match event.code {
-                KeyCode::Home
-                | KeyCode::End
-                | KeyCode::Delete
-                | KeyCode::Backspace
-                | KeyCode::Char(_) => {
-                    return send_text_entry();
-                }
-                _ => {}
-            },
-            KeyEvent {
-                modifiers: KeyModifiers::SHIFT,
-                ..
-            } => {
-                if let KeyCode::Char(_) = event.code {
-                    return send_text_entry();
-                }
-            }
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => {
-                let go_back = if event.code == KeyCode::Char('g') {
-                    true
-                } else if event.code == KeyCode::Char('x') {
-                    if let Some(ref mut text_entry) = self.text_entry {
-                        if text_entry.is_empty() {
-                            true
-                        } else {
-                            text_entry.clear();
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                if go_back {
-                    self.mode = AppMode::Standard;
-                    self.text_entry = None;
-                    return Ok((EventHandled(true), Redraw(true)));
-                }
-            }
-            _ => {}
-        }
-        Ok((EventHandled(false), Redraw(false)))
-    }
-
-    fn handle_commit_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
-        if let KeyEvent {
-            modifiers: KeyModifiers::NONE,
-            ..
-        } = event
-            && event.code == KeyCode::Enter
-        {
-            let err = || {
-                Err(JournalError::chain(&[
-                    ErrorKind::InvalidMode,
-                    // ErrorKind::Commit,
-                    ErrorKind::TextEntryFailed,
-                ]))
-            };
-            self.mode = AppMode::Standard;
-            let commit_message = self.get_entered_text().map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[
-                    ErrorKind::InvalidMode,
-                    // ErrorKind::Commit,
-                    e,
-                ]),
-            })?;
-            // fixme need actial validation
-            if commit_message.is_empty() {
-                return err();
-            }
-            self.git_commit(&commit_message)?;
-            self.text_entry = None;
-            return Ok(Redraw(true));
-        }
-        Ok(Redraw(false))
-    }
-
-    fn handle_new_mode_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
-        if let KeyEvent {
-            modifiers: KeyModifiers::NONE,
-            ..
-        } = event
-            && event.code == KeyCode::Enter
-        {
-            let err = || {
-                Err(JournalError::chain(&[
-                    ErrorKind::InvalidMode,
-                    ErrorKind::NewEntry,
-                    ErrorKind::TextEntryFailed,
-                ]))
-            };
-            self.mode = AppMode::Standard;
-            let entry_name = self.get_entered_text().map_err(|err| match err {
-                JournalError::Error(e) => {
-                    JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntry, e])
-                }
-            })?;
-            // fixme need actial validation
-            if entry_name.is_empty() {
-                return err();
-            }
-            self.new_entry(&EntryKind::Narrative, &entry_name)?;
-            self.text_entry = None;
-            return Ok(Redraw(true));
-        }
-        Ok(Redraw(false))
-    }
-
-    pub fn handle_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+    fn event_to_action(&self, event: &KeyEvent) -> Result<Action, JournalError> {
         match self.mode {
             AppMode::Standard => {
                 return self.handle_standard_mode_event(event);
             }
-            AppMode::NewEntry => {
-                let (handled, redraw) = self.handle_text_entry_event(event)?;
-                if !handled.0 {
-                    return self.handle_new_mode_event(event);
+            AppMode::NewEntry | AppMode::Commit => {
+                match event {
+                    KeyEvent {
+                        modifiers: KeyModifiers::NONE,
+                        code: KeyCode::Enter,
+                        ..
+                    } => {
+                        match self.get_entered_text() {
+                            Ok(text) => {
+                                // fixme validation for both input kinds
+                                // Missing ErrorKind::Commit
+                                let _ = self.get_entered_text().map_err(|err| match err {
+                                    JournalError::Error(e) => {
+                                        JournalError::chain(&[ErrorKind::InvalidMode, ErrorKind::NewEntry, e])
+                                    }
+                                })?;
+
+                                match self.mode {
+                                    AppMode::NewEntry => return Ok(Action::CreateEntry(text)),
+                                    AppMode::Commit => return Ok(Action::GitPerformCommit(text)),
+                                    _ => {}
+                                }
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    KeyEvent {
+                        modifiers: KeyModifiers::NONE,
+                        code: KeyCode::Home
+                            | KeyCode::End
+                            | KeyCode::Delete
+                            | KeyCode::Backspace,
+                        ..
+                    } => return Ok(Action::TextEntry(event.code)),
+                    KeyEvent {
+                        modifiers: KeyModifiers::SHIFT,
+                        code: KeyCode::Char(_),
+                        ..
+                    } => {
+                        return Ok(Action::TextEntry(event.code));
+                    }
+                    KeyEvent {
+                        modifiers: KeyModifiers::NONE,
+                        code: KeyCode::Char(_),
+                        ..
+                    } => {
+                        return Ok(Action::TextEntry(event.code));
+                    }
+                    KeyEvent {
+                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Char('g'),
+                        ..
+                    } => return Ok(Action::NavigateBack),
+                    KeyEvent {
+                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Char('x'),
+                        ..
+                    } => {
+                        let text = self.get_entered_text()?;
+                        if text.is_empty() {
+                            return Ok(Action::NavigateBack);
+                        } else {
+                            return Ok(Action::ClearTextEntry);
+                        }
+                    }
+                    _ => {}
                 }
-                return Ok(redraw);
-            }
-            AppMode::Commit => {
-                let (handled, redraw) = self.handle_text_entry_event(event)?;
-                if !handled.0 {
-                    return self.handle_commit_mode_event(event);
-                }
-                return Ok(redraw);
             }
             AppMode::ExportEntry => {}
             AppMode::Error(_) => match event {
@@ -644,12 +511,173 @@ impl App {
                     code: KeyCode::Char('g') | KeyCode::Char('x'),
                     ..
                 } => {
-                    self.mode = AppMode::Standard;
-                    return Ok(Redraw(true));
+                    return Ok(Action::NavigateBack);
                 }
                 _ => {}
             },
         }
+        Ok(Action::NoOp)
+    }
+
+    pub fn handle_event(&mut self, event: &KeyEvent) -> Result<Redraw, JournalError> {
+        let action = self.event_to_action(event)?;
+
+        let page: Box<&mut dyn Navigable> = Box::new(&mut self.entries_page);
+
+        match action {
+            Action::AppExit => return Err(JournalError::Error(ErrorKind::AppExit)),
+            Action::DisplayError(err) => return Err(err),
+
+            Action::ExportEntry => {
+                if let Some(entry) = page.select(&self.journal) {
+                    let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                    let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
+                    self.entry_exporter = Some(entry_exporter);
+                    self.begin_export_entry()?;
+                    self.mode = AppMode::ExportEntry;
+                    return Ok(Redraw(false));
+                }
+            }
+
+            Action::NameNewEntry => {
+                let now = OffsetDateTime::now_local().map_err(|_| {
+                    JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime])
+                })?;
+                let default_name = now.format(DEFAULT_ENTRY_FILENAME_FORMAT).map_err(|_| {
+                    JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
+                })?;
+
+                match self.entries_page.active_pane {
+                    ActivePane::General => {
+                        self.new_entry(&EntryKind::General, &default_name)?;
+                    }
+                    ActivePane::Narrative => {
+                        let name_suffix = now.format(NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT).map_err(|_| {
+                            JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::FormatDateTime])
+                        })?;
+                        let name_prefix = format!("{}{}", &default_name, &name_suffix);
+
+                        let mut text_entry = ratin::InputField::new()
+                            .with_placeholder("New entry name ...")
+                            .with_max_length(50);
+                        text_entry.set_text(&name_prefix);
+                        self.text_entry = Some(text_entry);
+                        self.mode = AppMode::NewEntry;
+                    }
+                }
+                return Ok(Redraw(true));
+            }
+
+            Action::CreateEntry(ref entry_name) => {
+                let err = || {
+                    Err(JournalError::chain(&[
+                        ErrorKind::InvalidMode,
+                        ErrorKind::NewEntry,
+                        ErrorKind::TextEntryFailed,
+                    ]))
+                };
+                self.mode = AppMode::Standard;
+                // fixme need actial validation
+                if entry_name.is_empty() {
+                    return err();
+                }
+                self.new_entry(&EntryKind::Narrative, &entry_name)?;
+                self.text_entry = None;
+                return Ok(Redraw(true));
+            }
+
+            Action::ActivateSelectedEntry => {
+                if let Some(entry) = page.select(&self.journal) {
+                    let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                    self.edit_existing_entry(&entry_kind, &entry)?;
+                }
+                return Ok(Redraw(true));
+            }
+
+            Action::Refresh => {
+                self.refresh()?;
+                return Ok(Redraw(true));
+            }
+
+            Action::NavigateNext => page.next_selection(),
+            Action::NavigatePrevious => page.previous_selection(),
+            Action::NavigatePageUp => page.pageup(self.height),
+            Action::NavigatePageDown => page.pagedown(self.height),
+            Action::NavigateFirst => page.home(),
+            Action::NavigateLast => page.end(),
+            Action::NavigateSwitchPane => page.switch_pane(),
+            Action::NavigateBack => {
+                self.mode = AppMode::Standard;
+                self.text_entry = None;
+                return Ok(Redraw(true));
+            }
+
+            Action::GitStageFile => {
+                if let Some(entry) = page.select(&self.journal) {
+                    let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                    self.git_add_entry(&entry_kind, &entry)?;
+                }
+            }
+
+            Action::GitUnstageFile => {
+                if let Some(entry) = page.select(&self.journal) {
+                    let entry_kind = EntryKind::from(&self.entries_page.active_pane);
+                    self.git_remove_entry(&entry_kind, &entry)?;
+                }
+            }
+
+            Action::GitCommitMessage => {
+                let text_entry = ratin::InputField::new()
+                    .with_placeholder("Commit message ...")
+                    .with_max_length(120);
+                self.text_entry = Some(text_entry);
+                self.mode = AppMode::Commit;
+            }
+
+            Action::GitPerformCommit(ref commit_message) => {
+                let err = || {
+                    Err(JournalError::chain(&[
+                        ErrorKind::InvalidMode,
+                        // ErrorKind::Commit,
+                        ErrorKind::TextEntryFailed,
+                    ]))
+                };
+                self.mode = AppMode::Standard;
+                // fixme need actial validation
+                if commit_message.is_empty() {
+                    return err();
+                }
+                self.git_commit(&commit_message)?;
+                self.text_entry = None;
+                return Ok(Redraw(true));
+            }
+
+            Action::TextEntry(ref keycode) => {
+                if let Some(ref mut text_entry) = self.text_entry {
+                    text_entry.handle_key(*keycode);
+                } else {
+                    return Err(JournalError::chain(&[
+                        ErrorKind::InvalidMode,
+                        ErrorKind::NewEntry,
+                        ErrorKind::TextEntryFailed,
+                    ]));
+                }
+            }
+            Action::ClearTextEntry => {
+                if let Some(ref mut text_entry) = self.text_entry {
+                    text_entry.clear();
+                } else {
+                    return Err(JournalError::chain(&[
+                        ErrorKind::InvalidMode,
+                        ErrorKind::NewEntry,
+                        ErrorKind::TextEntryFailed,
+                    ]));
+                }
+            }
+
+            Action::NoOp => {}
+        }
+
         Ok(Redraw(false))
     }
 
