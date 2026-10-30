@@ -367,18 +367,13 @@ impl InputHandler {
             Constraint::Min(5),
         ];
 
-        match mode {
-            InputMode::Ready(_) => {
-                let bindings = &self.key_map.keybindings()[..];
-                for row in bindings.chunks(widths.len()) {
-                    let mut row_vec: Vec<String> = Vec::new();
-                    for item in row.iter() {
-                        row_vec.push(item.to_string());
-                    }
-                    rows.push(Row::new(row_vec));
-                }
+        let bindings = &self.key_map.keybindings()[..];
+        for row in bindings.chunks(widths.len()) {
+            let mut row_vec: Vec<String> = Vec::new();
+            for item in row.iter() {
+                row_vec.push(item.to_string());
             }
-            _ => {}
+            rows.push(Row::new(row_vec));
         }
 
         let table = Table::default().rows(rows).widths(widths).block(block);
