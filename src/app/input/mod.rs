@@ -1,5 +1,8 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::{collections::HashMap, str::FromStr};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use ratatui::{Frame, layout::Constraint, widgets::Clear};
+use regex::Regex;
 
 use crate::{
     errors::{ErrorKind, JournalError},
@@ -20,8 +23,168 @@ impl SetText for ratin::InputField {
     }
 }
 
+#[derive(Default, Hash, PartialEq, Eq)]
 pub(super) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
+}
+
+impl InputChain {
+    fn chain(&self, next: &KeyEvent) -> InputChain {
+        let mut inputs: Vec<KeyEvent> = self.prior_inputs.to_owned();
+        inputs.push(*next);
+        InputChain {
+            prior_inputs: inputs,
+        }
+    }
+}
+
+impl FromStr for InputChain {
+    type Err = JournalError;
+
+    fn from_str(value: &str) -> Result<InputChain, Self::Err> {
+        let mut events: Vec<KeyEvent> = Vec::new();
+
+        for item in value.split(" ") {
+            let event = parse_keymap_str(item)?;
+            events.push(event);
+        }
+
+        let chain = InputChain {
+            prior_inputs: events,
+        };
+        Ok(chain)
+    }
+}
+
+impl From<&KeyEvent> for InputChain {
+    fn from(value: &KeyEvent) -> InputChain {
+        InputChain {
+            prior_inputs: vec![*value],
+        }
+    }
+}
+
+
+type KeyMapType = HashMap<InputChain, Action>;
+
+struct KeyMap {
+    map: KeyMapType,
+}
+
+fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
+    let make_event = |modifiers: KeyModifiers, code: KeyCode| KeyEvent {
+        modifiers,
+        code,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    };
+
+    if let Some(keycode) = match value {
+        "Enter" | "Return" => Some(KeyCode::Enter),
+        "End" => Some(KeyCode::End),
+        "Home" => Some(KeyCode::Home),
+        "PageUp" => Some(KeyCode::PageUp),
+        "PageDown" => Some(KeyCode::PageDown),
+        "Up" => Some(KeyCode::Up),
+        "Down" => Some(KeyCode::Down),
+        "Tab" => Some(KeyCode::Tab),
+        _ => None,
+    } {
+        return Ok(make_event(KeyModifiers::NONE, keycode));
+    }
+
+    let keymap_parser = Regex::new(r"^((?<mod>C|M)-)?(?<key>[a-z])$").unwrap();
+
+    if let Some(captures) = keymap_parser.captures(value) {
+        let modifier = if let Some(modifier) = captures.name("mod") {
+            match modifier.as_str() {
+                "C" => KeyModifiers::CONTROL,
+                "M" => KeyModifiers::ALT,
+                _ => {
+                    let msg = format!("Unable to parse keymap modifier: {:?}", value);
+                    return Err(JournalError::Error(ErrorKind::Wrapped(msg)));
+                }
+            }
+        } else {
+            KeyModifiers::NONE
+        };
+        let character = if let Some(character) = captures.name("key") {
+            character.as_str().chars().next().unwrap()
+        } else {
+            let msg = format!("Unable to parse keymap character: {:?}", value);
+            return Err(JournalError::Error(ErrorKind::Wrapped(msg)))
+        };
+        let event = make_event(
+            modifier,
+            KeyCode::Char(character),
+        );
+        Ok(event)
+    } else {
+        let msg = format!("Unable to parse keymap: {:?}", value);
+        Err(JournalError::Error(ErrorKind::Wrapped(msg)))
+    }
+}
+
+impl KeyMap {
+    fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
+        let mut keys: KeyMapType = HashMap::new();
+
+        for (keyseq, action_name) in mapconfig.iter() {
+            let input = InputChain::from_str(&keyseq)?;
+            let action = Action::from_str(&action_name)?;
+            keys.insert(input, action);
+        }
+
+        let map = KeyMap {
+            map: keys,
+        };
+        Ok(map)
+    }
+
+    pub(self) fn action(&self, input: &InputChain) -> Result<Action, JournalError> {
+        if let Some(action) = self.map.get(input) {
+            Ok(action.clone())
+        } else {
+            Ok(Action::NoOp)
+        }
+    }
+}
+
+const DEFAULT_KEYS: [(&str, Action); 19] = [
+    ("C-x", Action::AppExit),
+    ("C-e", Action::ExportEntry),
+    ("C-n", Action::NavigateNext),
+    ("C-p", Action::NavigatePrevious),
+    ("C-v", Action::NavigatePageDown),
+    ("M-v", Action::NavigatePageUp),
+    ("M-n", Action::NameNewEntry),
+    ("M-s", Action::GitStageFile),
+    ("M-u", Action::GitUnstageFile),
+    ("M-c", Action::GitCommitMessage),
+    ("g", Action::Refresh),
+    ("Enter", Action::ActivateSelectedEntry),
+    ("Home", Action::NavigateFirst),
+    ("End", Action::NavigateLast),
+    ("PageUp", Action::NavigatePageUp),
+    ("PageDown", Action::NavigatePageDown),
+    ("Up", Action::NavigatePrevious),
+    ("Down", Action::NavigateNext),
+    ("Tab", Action::NavigateSwitchPane),
+];
+
+impl Default for KeyMap {
+    fn default() -> Self {
+        let mut keys: KeyMapType = HashMap::new();
+
+        for (keyseq, action) in DEFAULT_KEYS {
+            let input = InputChain::from_str(&keyseq).unwrap();
+            keys.insert(input, action);
+        }
+
+        KeyMap {
+            map: keys,
+        }
+    }
 }
 
 pub(super) enum InputMode {
@@ -35,6 +198,7 @@ pub(super) enum InputMode {
 
 #[derive(Default)]
 pub(super) struct InputHandler {
+    key_map: KeyMap,
     text_entry: Option<ratin::InputField>,
 }
 
@@ -48,65 +212,8 @@ impl InputHandler {
     }
 
     fn handle_standard_mode_event(&self, event: &KeyEvent) -> Result<Action, JournalError> {
-        let action = match event {
-            KeyEvent {
-                modifiers: KeyModifiers::CONTROL,
-                ..
-            } => match event.code {
-                // C-x -> Exit
-                KeyCode::Char('x') => Action::AppExit,
-                // C-e -> Export
-                KeyCode::Char('e') => Action::ExportEntry,
-
-                // C-n -> Next item
-                KeyCode::Char('n') => Action::NavigateNext,
-                // C-p -> Previous item
-                KeyCode::Char('p') => Action::NavigatePrevious,
-                // C-v -> PgDn
-                KeyCode::Char('v') => Action::NavigatePageDown,
-                _ => Action::NoOp,
-            },
-            KeyEvent {
-                modifiers: KeyModifiers::ALT,
-                ..
-            } => match event.code {
-                // M-v -> PgUp
-                KeyCode::Char('v') => Action::NavigatePageUp,
-
-                // M-n -> New Entry
-                KeyCode::Char('n') => Action::NameNewEntry,
-
-                // M-s for stage file to index
-                KeyCode::Char('s') => Action::GitStageFile,
-
-                // M-u for unstage file to index
-                KeyCode::Char('u') => Action::GitUnstageFile,
-
-                // M-c for commit staged changes
-                KeyCode::Char('c') => Action::GitCommitMessage,
-
-                _ => Action::NoOp,
-            },
-            KeyEvent {
-                modifiers: KeyModifiers::NONE,
-                ..
-            } => match event.code {
-                KeyCode::Enter => Action::ActivateSelectedEntry,
-
-                KeyCode::Home => Action::NavigateFirst,
-                KeyCode::End => Action::NavigateLast,
-                KeyCode::PageUp => Action::NavigatePageUp,
-                KeyCode::PageDown => Action::NavigatePageDown,
-                KeyCode::Down => Action::NavigateNext,
-                KeyCode::Up => Action::NavigatePrevious,
-                KeyCode::Tab => Action::NavigateSwitchPane,
-                // Pressing g wil refresh the view from repository
-                KeyCode::Char('g') => Action::Refresh,
-                _ => Action::NoOp,
-            },
-            _ => Action::NoOp,
-        };
-        Ok(action)
+        let input = InputChain::from(event);
+        return self.key_map.action(&input);
     }
 
     pub(super) fn action(
