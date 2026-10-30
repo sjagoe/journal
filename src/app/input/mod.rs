@@ -482,13 +482,12 @@ impl InputHandler {
                 return Ok(self.handle_chained_input(&input));
             }
             InputMode::NewEntry(maybe_input) | InputMode::Commit(maybe_input) => {
-                if let Some(action) = self.handle_text_entry_event(mode, event)? {
-                    return Ok(action);
-                }
-
                 let input = if let Some(input) = maybe_input {
                     input.chain(event)
                 } else {
+                    if let Some(action) = self.handle_text_entry_event(mode, event)? {
+                        return Ok(action);
+                    }
                     InputChain::from(event)
                 };
 
