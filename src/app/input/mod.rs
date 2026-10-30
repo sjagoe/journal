@@ -33,18 +33,6 @@ pub(super) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
 }
 
-impl PartialOrd for InputChain {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.to_string().cmp(&other.to_string()))
-    }
-}
-
-impl Ord for InputChain {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.to_string().cmp(&other.to_string())
-    }
-}
-
 impl ToString for InputChain {
     fn to_string(&self) -> String {
         let mut parts: Vec<String> = Vec::new();
