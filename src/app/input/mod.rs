@@ -275,8 +275,8 @@ impl KeyMap {
 }
 
 const DEFAULT_KEYS: [(&str, Action); 19] = [
-    ("C-x C-c", Action::AppExit),
-    ("C-u C-u C-e", Action::ExportEntry),
+    ("C-x", Action::AppExit),
+    ("C-e", Action::ExportEntry),
     ("C-n", Action::NavigateNext),
     ("C-p", Action::NavigatePrevious),
     ("C-v", Action::NavigatePageDown),
