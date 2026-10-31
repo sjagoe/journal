@@ -3,7 +3,7 @@ name = "journal"
 version = "0.1.0"
 edition = "2024"
 publish = false
-default-run = "journal"
+license = "LGPL-2.1"
 
 [dependencies]
 age = { version = "^0.12", default-features = false, features = ["cli-common", "ssh", "armor", "plugin"] }
