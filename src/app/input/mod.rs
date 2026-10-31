@@ -8,6 +8,7 @@ use ratatui::{
 
 use self::{
     input_chain::InputChain,
+    input_field::InputField,
     key_map::{KeyMap, KeyMapAction},
 };
 
@@ -18,6 +19,7 @@ use crate::{
 };
 
 pub(super) mod input_chain;
+mod input_field;
 mod key_map;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -32,7 +34,7 @@ pub(super) enum InputMode {
 #[derive(Default)]
 pub(super) struct InputHandler {
     key_map: KeyMap,
-    // text_entry: Option<ratin::InputField>,
+    text_entry: Option<InputField>,
 }
 
 impl InputHandler {
@@ -78,12 +80,11 @@ impl InputHandler {
     }
 
     fn get_entered_text(&self) -> Result<String, JournalError> {
-        // if let Some(ref text_entry) = self.text_entry {
-        //     Ok(text_entry.get_text().to_owned())
-        // } else {
-        //     Err(JournalError::Error(ErrorKind::TextEntryFailed))
-        // }
-        Err(JournalError::Error(ErrorKind::TextEntryFailed))
+        if let Some(ref text_entry) = self.text_entry {
+            Ok(text_entry.get_text().to_owned())
+        } else {
+            Err(JournalError::Error(ErrorKind::TextEntryFailed))
+        }
     }
 
     fn handle_chained_input(&self, input: &InputChain) -> Action {
@@ -215,61 +216,49 @@ impl InputHandler {
         Ok(Action::NoOp)
     }
 
-    pub(super) fn prepare_entry(&mut self, _placeholder: &str, _default: Option<&str>) {
-        // let mut text_entry = ratin::InputField::new()
-        //     .with_placeholder(placeholder)
-        //     .with_max_length(50);
-        // if let Some(default_text) = default {
-        //     text_entry.set_text(default_text);
-        // }
-        // self.text_entry = Some(text_entry);
+    pub(super) fn prepare_entry(&mut self, title: &str, placeholder: &str, default: Option<&str>) {
+        let mut text_entry = InputField::new(title, placeholder);
+        if let Some(default_text) = default {
+            text_entry.set_text(default_text);
+        }
+        self.text_entry = Some(text_entry);
     }
 
     pub(super) fn clear_text_entry(&mut self) -> Result<(), JournalError> {
-        // if let Some(ref mut text_entry) = self.text_entry {
-        //     text_entry.clear();
-        // } else {
-        //     return Err(JournalError::chain(&[
-        //         ErrorKind::InvalidMode,
-        //         ErrorKind::NewEntry,
-        //         ErrorKind::TextEntryFailed,
-        //     ]));
-        // }
-        // Ok(())
-        Err(JournalError::chain(&[
-            ErrorKind::InvalidMode,
-            ErrorKind::NewEntry,
-            ErrorKind::TextEntryFailed,
-        ]))
+        if let Some(ref mut text_entry) = self.text_entry {
+            text_entry.clear();
+        } else {
+            return Err(JournalError::chain(&[
+                ErrorKind::InvalidMode,
+                ErrorKind::NewEntry,
+                ErrorKind::TextEntryFailed,
+            ]));
+        }
+        Ok(())
     }
 
     pub(super) fn handle_text_entry(&mut self, keycode: &KeyCode) -> Result<(), JournalError> {
-        // if let Some(ref mut text_entry) = self.text_entry {
-        //     text_entry.handle_key(*keycode);
-        // } else {
-        //     return Err(JournalError::chain(&[
-        //         ErrorKind::InvalidMode,
-        //         ErrorKind::NewEntry,
-        //         ErrorKind::TextEntryFailed,
-        //     ]));
-        // }
-        // Ok(())
-        Err(JournalError::chain(&[
-            ErrorKind::InvalidMode,
-            ErrorKind::NewEntry,
-            ErrorKind::TextEntryFailed,
-        ]))
+        if let Some(ref mut text_entry) = self.text_entry {
+            text_entry.handle_key(keycode);
+        } else {
+            return Err(JournalError::chain(&[
+                ErrorKind::InvalidMode,
+                ErrorKind::NewEntry,
+                ErrorKind::TextEntryFailed,
+            ]));
+        }
+        Ok(())
     }
 
     pub(super) fn render_input(&mut self, frame: &mut Frame) {
-        // if let Some(ref mut text_entry) = self.text_entry {
-        //     let entry_area = centered_rect(
-        //         Constraint::Percentage(60),
-        //         Constraint::Length(3),
-        //         frame.area(),
-        //     );
-        //     frame.render_widget(Clear, entry_area);
-        //     text_entry.render(frame, entry_area);
-        // }
+        if let Some(ref mut text_entry) = self.text_entry {
+            let entry_area = centered_rect(
+                Constraint::Percentage(60),
+                Constraint::Length(3),
+                frame.area(),
+            );
+            frame.render_widget(Clear, entry_area);
+            text_entry.draw(frame, entry_area);
+        }
     }
 }
