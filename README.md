@@ -19,6 +19,8 @@ nix shell nixpkgs#age
 # Do not use the -pq option to generate post-quantum hybrid ML-KEM-768 + X25519 key pair.
 # rage does not yet support pq identities
 age-keygen --o ~/.age/age-personal
+
+exit  # exit the "nix shell" sub-shell
 ```
 
 2. Create a new git repository with the content from the `./example/`
