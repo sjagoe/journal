@@ -1,9 +1,3 @@
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-    str::FromStr,
-};
-
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
@@ -12,7 +6,10 @@ use ratatui::{
     widgets::{Block, Clear, Row, Table},
 };
 
-use self::input_chain::InputChain;
+use self::{
+    input_chain::InputChain,
+    key_map::{KeyMap, KeyMapAction},
+};
 
 use super::Action;
 use crate::{
@@ -218,7 +215,7 @@ impl InputHandler {
         Ok(Action::NoOp)
     }
 
-    pub(super) fn prepare_entry(&mut self, placeholder: &str, default: Option<&str>) {
+    pub(super) fn prepare_entry(&mut self, _placeholder: &str, _default: Option<&str>) {
         // let mut text_entry = ratin::InputField::new()
         //     .with_placeholder(placeholder)
         //     .with_max_length(50);

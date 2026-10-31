@@ -1,5 +1,15 @@
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    str::FromStr,
+};
+
+use crate::{app::Action, errors::JournalError};
+
+use super::InputChain;
+
 #[derive(Debug, PartialEq, Eq, Hash)]
-enum KeyMapAction {
+pub(super) enum KeyMapAction {
     Action(Action),
     Input(InputChain),
 }
@@ -26,7 +36,7 @@ type KeyMapType = HashMap<InputChain, KeyMapAction>;
 type KeyMapReverseType = HashMap<KeyMapAction, InputChain>;
 
 #[derive(Debug)]
-struct KeyMap {
+pub(super) struct KeyMap {
     map: KeyMapType,
     reverse: KeyMapReverseType,
 }
@@ -98,7 +108,7 @@ impl KeyMap {
         Ok(map)
     }
 
-    pub(self) fn action(&self, input: &InputChain) -> KeyMapAction {
+    pub(super) fn action(&self, input: &InputChain) -> KeyMapAction {
         if let Some(action) = self.map.get(input) {
             action.to_owned()
         } else {

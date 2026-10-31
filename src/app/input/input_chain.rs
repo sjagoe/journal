@@ -60,7 +60,7 @@ fn parse_keymap_str(value: &str) -> Result<KeyEvent, JournalError> {
 }
 
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
-pub(super) struct InputChain {
+pub(crate) struct InputChain {
     prior_inputs: Vec<KeyEvent>,
 }
 
