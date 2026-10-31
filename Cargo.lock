@@ -1582,7 +1582,6 @@ dependencies = [
  "git2",
  "gpgme",
  "ratatui",
- "ratin",
  "regex",
  "serde",
  "serde_json",
@@ -2487,16 +2486,6 @@ dependencies = [
  "time",
  "unicode-segmentation",
  "unicode-width",
-]
-
-[[package]]
-name = "ratin"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27ee67d590711a26716542c69dd6bd2f9b7ec9e4fde7217a132fa838863eadaf"
-dependencies = [
- "crossterm",
- "ratatui",
 ]
 
 [[package]]
