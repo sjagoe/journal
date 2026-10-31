@@ -97,8 +97,12 @@ impl EntriesPane {
     pub(super) fn update(&mut self, journal: &Journal) {
         let section = journal.section(&(&self.pane_kind).into());
         self.count = section.len();
-        if self.selected_index > self.count - 1 {
-            self.end();
+        if self.count == 0 {
+            self.selected_index = 0;
+        } else {
+            if self.selected_index > self.count - 1 {
+                self.end();
+            }
         }
     }
 }
