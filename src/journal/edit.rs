@@ -1,8 +1,8 @@
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File},
-    io::{self, Write},
+    fs::{self, File, metadata},
+    io::{self, ErrorKind::NotFound, Write},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -258,6 +258,20 @@ impl EntryEditor {
     }
 
     fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
+        let mut directory_path = encrypted_file_path.to_owned();
+        directory_path.pop();
+
+        if let Some(err) = metadata(&directory_path).err() {
+            if err.kind() == NotFound {
+                fs::create_dir(&directory_path).map_err(|err| {
+                    JournalError::chain(&[
+                        ErrorKind::FileWriteError,
+                        ErrorKind::Wrapped(err.to_string()),
+                    ])
+                })?;
+            }
+        }
+
         let _ = File::create_new(encrypted_file_path).map_err(|err| {
             JournalError::chain(&[
                 ErrorKind::FileWriteError,
