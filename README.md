@@ -16,8 +16,8 @@ mkdir ~/.age
 
 nix shell nixpkgs#age
 
-# -pq -  Generate a post-quantum hybrid ML-KEM-768 + X25519 key pair.
-age-keygen -pq -o ~/.age/age-personal
+# Do not use the -pq option to generate post-quantum hybrid ML-KEM-768 + X25519 key pair.
+age-keygen --o ~/.age/age-personal
 ```
 
 2. Create a new git repository with the content from the `./example/`
