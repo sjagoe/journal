@@ -1,4 +1,7 @@
-use std::{fmt::{self, Display}, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use crossterm::event::KeyCode;
 

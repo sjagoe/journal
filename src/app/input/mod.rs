@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::{self, Display}, str::FromStr};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use ratatui::{
@@ -226,7 +230,6 @@ impl KeyMap {
             Action::NameNewEntry,
             Action::ActivateSelectedEntry,
             Action::Refresh,
-
             Action::NavigateNext,
             Action::NavigatePrevious,
             Action::NavigatePageUp,
@@ -235,7 +238,6 @@ impl KeyMap {
             Action::NavigateLast,
             Action::NavigateSwitchPane,
             Action::NavigateBack,
-
             Action::GitStageFile,
             Action::GitUnstageFile,
             Action::GitCommitMessage,
@@ -263,7 +265,9 @@ impl KeyMap {
             } else {
                 let map_action = KeyMapAction::Action(action.clone());
                 keys.insert(input.to_owned(), map_action.to_owned());
-                reverse.entry(map_action).or_insert_with(|| input.to_owned());
+                reverse
+                    .entry(map_action)
+                    .or_insert_with(|| input.to_owned());
             }
         }
     }
@@ -509,14 +513,10 @@ impl InputHandler {
                             }
                         }
                         Action::NoOp => match mode {
-                            InputMode::NewEntry(_) => {
-                                Action::NextMode(InputMode::NewEntry(None))
-                            }
-                            InputMode::Commit(_) => {
-                                Action::NextMode(InputMode::Commit(None))
-                            }
+                            InputMode::NewEntry(_) => Action::NextMode(InputMode::NewEntry(None)),
+                            InputMode::Commit(_) => Action::NextMode(InputMode::Commit(None)),
                             _ => Action::NoOp,
-                        }
+                        },
                         _ => Action::NoOp,
                     },
                     KeyMapAction::Input(_) => match mode {

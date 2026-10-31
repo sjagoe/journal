@@ -40,9 +40,7 @@ fn get_export_command(
 ) -> Result<(String, Vec<String>), JournalError> {
     match configured_export {
         Some(ref export) => program_from_string(export),
-        None => {
-            Ok(("xdg-open".to_string(), vec![]))
-        }
+        None => Ok(("xdg-open".to_string(), vec![])),
     }
 }
 
