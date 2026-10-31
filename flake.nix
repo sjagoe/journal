@@ -92,6 +92,20 @@
           };
         in
           {
+            checks = {
+              inherit journal;
+
+              crate-fmt = craneLib.cargoFmt {
+                inherit src;
+              };
+
+              crate-toml-fmt = craneLib.taploFmt {
+                src = pkgs.lib.sources.sourceFilesBySuffices src [ ".toml" ];
+                # taplo arguments can be further customized below as needed
+                # taploExtraArgs = "--config ./taplo.toml";
+              };
+            };
+
             packages = {
               default = journal;
               inherit journal;
@@ -106,6 +120,9 @@
               # Extra inputs can be added here; cargo and rustc are provided by default.
               packages = [
                 toolchain.passthru.availableComponents.rust-analyzer
+                pkgs.taplo
+                pkgs.cargo-deny
+                pkgs.cargo-audit
               ];
             };
           });
