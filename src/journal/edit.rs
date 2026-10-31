@@ -261,15 +261,15 @@ impl EntryEditor {
         let mut directory_path = encrypted_file_path.to_owned();
         directory_path.pop();
 
-        if let Some(err) = metadata(&directory_path).err() {
-            if err.kind() == NotFound {
-                fs::create_dir(&directory_path).map_err(|err| {
-                    JournalError::chain(&[
-                        ErrorKind::FileWriteError,
-                        ErrorKind::Wrapped(err.to_string()),
-                    ])
-                })?;
-            }
+        if let Some(err) = metadata(&directory_path).err()
+            && err.kind() == NotFound
+        {
+            fs::create_dir(&directory_path).map_err(|err| {
+                JournalError::chain(&[
+                    ErrorKind::FileWriteError,
+                    ErrorKind::Wrapped(err.to_string()),
+                ])
+            })?;
         }
 
         let _ = File::create_new(encrypted_file_path).map_err(|err| {
