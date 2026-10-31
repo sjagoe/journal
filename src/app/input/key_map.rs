@@ -8,6 +8,29 @@ use crate::{app::Action, errors::JournalError};
 
 use super::InputChain;
 
+const DEFAULT_KEYS: [(&str, Action); 20] = [
+    ("C-x", Action::AppExit),
+    ("C-e", Action::ExportEntry),
+    ("C-g", Action::NavigateBack),
+    ("C-n", Action::NavigateNext),
+    ("C-p", Action::NavigatePrevious),
+    ("C-v", Action::NavigatePageDown),
+    ("M-v", Action::NavigatePageUp),
+    ("M-n", Action::NameNewEntry),
+    ("M-s", Action::GitStageFile),
+    ("M-u", Action::GitUnstageFile),
+    ("M-c", Action::GitCommitMessage),
+    ("g", Action::Refresh),
+    ("Enter", Action::ActivateSelectedEntry),
+    ("Home", Action::NavigateFirst),
+    ("End", Action::NavigateLast),
+    ("PageUp", Action::NavigatePageUp),
+    ("PageDown", Action::NavigatePageDown),
+    ("Up", Action::NavigatePrevious),
+    ("Down", Action::NavigateNext),
+    ("Tab", Action::NavigateSwitchPane),
+];
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub(super) enum KeyMapAction {
     Action(Action),
@@ -87,15 +110,29 @@ impl KeyMap {
         }
     }
 
-    #[allow(unused)]
-    fn new(mapconfig: &HashMap<String, String>) -> Result<Self, JournalError> {
+    pub(super) fn new(mapconfig: &HashMap<String, Vec<String>>) -> Result<Self, JournalError> {
         let mut keys: KeyMapType = HashMap::new();
         let mut reverse: KeyMapReverseType = HashMap::new();
 
-        for (keyseq, action_name) in mapconfig.iter() {
-            let input_chain = InputChain::from_str(keyseq)?;
-            let action = Action::from_str(action_name)?;
-            Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
+        for (action_name, action_keys) in mapconfig.iter() {
+            for keyseq in action_keys.iter() {
+                let input_chain = InputChain::from_str(keyseq)?;
+                let action = Action::from_str(action_name)?;
+                Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
+            }
+        }
+
+        // Add default actions if not overridden by config
+        let mut missing_actions: Vec<(&str, Action)> = Vec::new();
+        for (keyseq, action) in DEFAULT_KEYS {
+            let keymap_action = KeyMapAction::Action(action.clone());
+            if !reverse.contains_key(&keymap_action) {
+                missing_actions.push((keyseq, action));
+            }
+        }
+        for (keyseq, action) in missing_actions.iter() {
+            let input_chain = InputChain::from_str(keyseq).unwrap();
+            Self::add_keymap(&mut keys, &mut reverse, &input_chain, action);
         }
 
         let map = KeyMap { map: keys, reverse };
@@ -119,42 +156,5 @@ impl Display for KeyMap {
             lines.push(line);
         }
         write!(f, "{}", lines.join("\n"))
-    }
-}
-
-const DEFAULT_KEYS: [(&str, Action); 20] = [
-    ("C-x", Action::AppExit),
-    ("C-e", Action::ExportEntry),
-    ("C-g", Action::NavigateBack),
-    ("C-n", Action::NavigateNext),
-    ("C-p", Action::NavigatePrevious),
-    ("C-v", Action::NavigatePageDown),
-    ("M-v", Action::NavigatePageUp),
-    ("M-n", Action::NameNewEntry),
-    ("M-s", Action::GitStageFile),
-    ("M-u", Action::GitUnstageFile),
-    ("M-c", Action::GitCommitMessage),
-    ("g", Action::Refresh),
-    ("Enter", Action::ActivateSelectedEntry),
-    ("Home", Action::NavigateFirst),
-    ("End", Action::NavigateLast),
-    ("PageUp", Action::NavigatePageUp),
-    ("PageDown", Action::NavigatePageDown),
-    ("Up", Action::NavigatePrevious),
-    ("Down", Action::NavigateNext),
-    ("Tab", Action::NavigateSwitchPane),
-];
-
-impl Default for KeyMap {
-    fn default() -> Self {
-        let mut keys: KeyMapType = HashMap::new();
-        let mut reverse: KeyMapReverseType = HashMap::new();
-
-        for (keyseq, action) in DEFAULT_KEYS {
-            let input_chain = InputChain::from_str(keyseq).unwrap();
-            Self::add_keymap(&mut keys, &mut reverse, &input_chain, &action);
-        }
-
-        KeyMap { map: keys, reverse }
     }
 }

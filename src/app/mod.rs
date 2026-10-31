@@ -58,7 +58,7 @@ impl<'a> App<'a> {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        let input_handler = InputHandler::default();
+        let input_handler = InputHandler::new(config)?;
 
         let journal = Journal::from_file(&config.journal_path, &repo);
         let entries_page = EntriesPage::new(&journal);

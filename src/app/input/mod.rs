@@ -15,6 +15,7 @@ use self::{
 
 use super::Action;
 use crate::{
+    config::Config,
     errors::{ErrorKind, JournalError},
     ui::centered_rect,
 };
@@ -31,13 +32,20 @@ pub(super) enum InputMode {
     Error(JournalError),
 }
 
-#[derive(Default)]
 pub(super) struct InputHandler<'a> {
     key_map: KeyMap,
     text_entry: Option<TextArea<'a>>,
 }
 
 impl<'a> InputHandler<'a> {
+    pub(super) fn new(config: &Config) -> Result<Self, JournalError> {
+        let key_map = KeyMap::new(&config.key_map)?;
+        Ok(Self {
+            key_map,
+            text_entry: None,
+        })
+    }
+
     pub fn draw(&self, frame: &mut Frame, area: Rect, block: Block, mode: &InputMode) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
