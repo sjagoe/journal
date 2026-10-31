@@ -41,18 +41,18 @@ static DEFAULT_ENTRY_FILENAME_FORMAT: StaticFormatDescription =
 static NARRATIVE_ENTRY_FILENAME_SUFFIX_FORMAT: StaticFormatDescription =
     format_description!("-[day]_");
 
-pub struct App {
+pub struct App<'a> {
     config: Config,
     journal: Journal,
     entries_page: EntriesPage,
-    input_handler: InputHandler,
+    input_handler: InputHandler<'a>,
     height: u16,
     mode: InputMode,
     entry_exporter: Option<EntryExporter>,
 }
 
-impl App {
-    pub fn new(config: &Config) -> Result<App, JournalError> {
+impl<'a> App<'a> {
+    pub fn new(config: &Config) -> Result<App<'_>, JournalError> {
         let repo = match Repository::open(&config.journal_path) {
             Ok(repo) => repo,
             Err(e) => panic!("failed to open: {}", e),
@@ -383,8 +383,11 @@ impl App {
                             })?;
                         let name_prefix = format!("{}{}", default_name, name_suffix);
 
-                        self.input_handler
-                            .prepare_entry("New entry name ...", Some(&name_prefix));
+                        self.input_handler.prepare_entry(
+                            "Entry Name",
+                            "New entry name ...",
+                            Some(&name_prefix),
+                        );
 
                         self.mode = InputMode::NewEntry(None);
                     }
@@ -450,7 +453,8 @@ impl App {
             }
 
             Action::GitCommitMessage => {
-                self.input_handler.prepare_entry("Commit message ...", None);
+                self.input_handler
+                    .prepare_entry("Commit", "Commit message ...", None);
                 self.mode = InputMode::Commit(None);
             }
 
@@ -471,8 +475,8 @@ impl App {
                 return Ok(Redraw(true));
             }
 
-            Action::TextEntry(ref keycode) => {
-                self.input_handler.handle_text_entry(keycode)?;
+            Action::TextEntry(ref key_event) => {
+                self.input_handler.handle_text_entry(key_event)?;
             }
             Action::ClearTextEntry => {
                 self.input_handler.clear_text_entry()?;

@@ -2,13 +2,14 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, Row, Table},
+    widgets::{Block, Borders, Clear, Padding, Row, Table},
 };
+use ratatui_textarea::TextArea;
 
 use self::{
     input_chain::InputChain,
-    input_field::InputField,
     key_map::{KeyMap, KeyMapAction},
 };
 
@@ -19,7 +20,6 @@ use crate::{
 };
 
 pub(super) mod input_chain;
-mod input_field;
 mod key_map;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -32,12 +32,12 @@ pub(super) enum InputMode {
 }
 
 #[derive(Default)]
-pub(super) struct InputHandler {
+pub(super) struct InputHandler<'a> {
     key_map: KeyMap,
-    text_entry: Option<InputField>,
+    text_entry: Option<TextArea<'a>>,
 }
 
-impl InputHandler {
+impl<'a> InputHandler<'a> {
     pub fn draw(&self, frame: &mut Frame, area: Rect, block: Block, mode: &InputMode) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
@@ -81,7 +81,8 @@ impl InputHandler {
 
     fn get_entered_text(&self) -> Result<String, JournalError> {
         if let Some(ref text_entry) = self.text_entry {
-            Ok(text_entry.get_text().to_owned())
+            let text = &text_entry.lines()[0];
+            Ok(text.to_owned())
         } else {
             Err(JournalError::Error(ErrorKind::TextEntryFailed))
         }
@@ -135,20 +136,20 @@ impl InputHandler {
                 modifiers: KeyModifiers::NONE,
                 code: KeyCode::Home | KeyCode::End | KeyCode::Delete | KeyCode::Backspace,
                 ..
-            } => return Ok(Some(Action::TextEntry(event.code))),
+            } => return Ok(Some(Action::TextEntry(*event))),
             KeyEvent {
                 modifiers: KeyModifiers::SHIFT,
                 code: KeyCode::Char(_),
                 ..
             } => {
-                return Ok(Some(Action::TextEntry(event.code)));
+                return Ok(Some(Action::TextEntry(*event)));
             }
             KeyEvent {
                 modifiers: KeyModifiers::NONE,
                 code: KeyCode::Char(_),
                 ..
             } => {
-                return Ok(Some(Action::TextEntry(event.code)));
+                return Ok(Some(Action::TextEntry(*event)));
             }
             _ => {}
         }
@@ -217,10 +218,26 @@ impl InputHandler {
     }
 
     pub(super) fn prepare_entry(&mut self, title: &str, placeholder: &str, default: Option<&str>) {
-        let mut text_entry = InputField::new(title, placeholder);
+        let mut text_entry = TextArea::default();
+        text_entry.set_cursor_line_style(Style::default());
+        text_entry.set_placeholder_text(placeholder);
+        // text_entry.set_max_histories(0);
         if let Some(default_text) = default {
-            text_entry.set_text(default_text);
+            text_entry.insert_str(default_text);
         }
+
+        let edit_block = Block::default()
+            .padding(Padding::horizontal(1))
+            .borders(Borders::ALL)
+            .title(Span::styled(
+                format!(" {} ", title),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .style(Style::default());
+        text_entry.set_block(edit_block);
+
         self.text_entry = Some(text_entry);
     }
 
@@ -237,9 +254,9 @@ impl InputHandler {
         Ok(())
     }
 
-    pub(super) fn handle_text_entry(&mut self, keycode: &KeyCode) -> Result<(), JournalError> {
+    pub(super) fn handle_text_entry(&mut self, event: &KeyEvent) -> Result<(), JournalError> {
         if let Some(ref mut text_entry) = self.text_entry {
-            text_entry.handle_key(keycode);
+            text_entry.input(*event);
         } else {
             return Err(JournalError::chain(&[
                 ErrorKind::InvalidMode,
@@ -258,7 +275,7 @@ impl InputHandler {
                 frame.area(),
             );
             frame.render_widget(Clear, entry_area);
-            text_entry.draw(frame, entry_area);
+            frame.render_widget(&*text_entry, entry_area);
         }
     }
 }

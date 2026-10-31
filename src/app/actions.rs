@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
 
 use crate::errors::{ErrorKind, JournalError};
 
@@ -35,7 +35,7 @@ pub(super) enum Action {
     GitCommitMessage,
     GitPerformCommit(String),
 
-    TextEntry(KeyCode),
+    TextEntry(KeyEvent),
     ClearTextEntry,
 
     NextMode(InputMode),

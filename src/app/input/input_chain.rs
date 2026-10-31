@@ -93,12 +93,6 @@ impl Display for InputChain {
 }
 
 impl InputChain {
-    fn to_owned(&self) -> InputChain {
-        InputChain {
-            prior_inputs: self.prior_inputs.to_owned(),
-        }
-    }
-
     fn from_vec(inputs: &Vec<KeyEvent>) -> InputChain {
         InputChain {
             prior_inputs: inputs.to_owned(),
