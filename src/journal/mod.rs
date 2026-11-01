@@ -1,12 +1,10 @@
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Command;
 
 use git2::{Index, Repository, Status};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use time::OffsetDateTime;
+use walkdir::WalkDir;
 
 mod age;
 mod changes;
@@ -125,37 +123,39 @@ pub fn entry_filename(kind: &EntryKind, name: &str) -> String {
     format!("{}/{}.age", directory, name)
 }
 
-fn nix_eval_rules(path: &str) -> SerializedEntries {
+fn load_entries_from_path(path: &str) -> SerializedEntries {
     let mut entries: SerializedEntries = SerializedEntries::default();
-    let mut command = Command::new("nix");
-    command
-        .args(["eval", "--no-net", "--json", "--file", "./rules.nix"])
-        .current_dir(path);
-    let entry_match = Regex::new(r"^(?<type>[a-z]+)/(?<name>[-_a-zA-Z0-9]+)\.age$").unwrap();
-    if let Ok(result) = command.output()
-        && let Ok(stdout) = str::from_utf8(&result.stdout)
-        && let Value::Object(value) =
-            serde_json::from_str(stdout).expect("Failed to parse `nix evaluate` output")
+
+    for entry in WalkDir::new(path)
+        .min_depth(2)
+        .max_depth(2)
+        .into_iter()
+        .flatten()
     {
-        for entry_path in value.keys() {
-            if let Some(captures) = entry_match.captures(entry_path) {
-                let entry_type = captures.name("type").unwrap().as_str();
-                let entry_name = captures.name("name").unwrap().as_str();
-                match entry_type {
-                    ENTRY_DIRECTORY_DOCUMENT => entries.documents.push(entry_name.to_owned()),
-                    ENTRY_DIRECTORY_GENERAL => entries.general.push(entry_name.to_owned()),
-                    ENTRY_DIRECTORY_NARRATIVE => entries.narrative.push(entry_name.to_owned()),
-                    _ => panic!("unexpected"),
-                };
-            }
+        let entry_path = entry.path();
+        if let Some(extension) = entry_path.extension()
+            && extension == "age"
+            && let Some(parent) = entry_path.parent()
+            && let Some(parent_name) = parent.file_name()
+            && let Some(entry_type) = parent_name.to_str()
+            && let Some(file_name) = entry_path.with_extension("").file_name()
+            && let Some(entry_name) = file_name.to_str()
+        {
+            match entry_type {
+                ENTRY_DIRECTORY_DOCUMENT => entries.documents.push(entry_name.to_owned()),
+                ENTRY_DIRECTORY_GENERAL => entries.general.push(entry_name.to_owned()),
+                ENTRY_DIRECTORY_NARRATIVE => entries.narrative.push(entry_name.to_owned()),
+                _ => {}
+            };
         }
     }
+
     entries
 }
 
 impl Journal {
     pub fn from_file(path: &str, repo: &Repository) -> Journal {
-        let entries = nix_eval_rules(path);
+        let entries = load_entries_from_path(path);
 
         let changes = LastChanged::new(repo);
 
