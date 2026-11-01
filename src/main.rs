@@ -5,10 +5,10 @@ use std::{fs::File, time::Duration};
 use color_eyre::Result;
 use dirs::config_dir;
 
+use clap::Parser;
 use crossterm::event::{self, Event as CrosstermEvent, KeyEventKind};
 use errors::{ErrorKind, JournalError};
 use ratatui::{Terminal, backend::Backend};
-use clap::Parser;
 
 mod app;
 mod config;
@@ -29,7 +29,6 @@ struct Args {
     #[arg(short, long)]
     config: Option<String>,
 }
-
 
 fn main() -> Result<()> {
     errors::install_hooks()?;
