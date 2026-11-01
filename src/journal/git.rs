@@ -89,7 +89,9 @@ mod tests {
 
         std::fs::write(&new_file_path, b"content").expect("Failed to create file");
 
-        index.add_path(&new_file_name).expect("Failed to add to index");
+        index
+            .add_path(&new_file_name)
+            .expect("Failed to add to index");
 
         let expected_message = "commit message";
         commit(&repo, expected_message).expect("Failed to commit");

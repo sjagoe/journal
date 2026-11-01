@@ -108,8 +108,8 @@ pub(super) fn encrypt<P: AsRef<Path>>(
 mod tests {
     use std::path::PathBuf;
 
-    use age::x25519::Identity;
     use age::secrecy::ExposeSecret;
+    use age::x25519::Identity;
 
     use super::*;
 
