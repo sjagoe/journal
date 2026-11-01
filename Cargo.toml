@@ -32,6 +32,7 @@ time = { version = "0.3.55", features = [
   "local-offset",
   "macros",
 ] }
+walkdir = "2.5.0"
 
 [profile.dev]
 # Turn on a small amount of optimisation in Development mode.

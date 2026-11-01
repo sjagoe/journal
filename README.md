@@ -27,7 +27,7 @@ exit  # exit the "nix shell" sub-shell
    directory.
 
 3. Copy the public key printed by `age-keygen` above into the
-   `publicKeys` list in your journal repository `rules.nix`.
+   `keys` array in your journal repository `metadata.json`.
 
 4. Configure this tool with a JSON file in
    `~/.config/personal-journal/config.json`.
