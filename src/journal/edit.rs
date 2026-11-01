@@ -2,14 +2,15 @@ use std::{
     env,
     ffi::OsStr,
     fs::{self, File, metadata},
-    io::{self, ErrorKind::NotFound, Write},
+    io::{self, BufReader, ErrorKind::NotFound},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
 };
 
 use color_eyre::Result;
 use digest_io::IoWrapper;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
 use time::macros::format_description;
@@ -22,7 +23,7 @@ use crate::{
     tui,
 };
 
-use super::age::load_identities;
+use super::age::{encrypt, load_identities};
 
 static ORG_DATE_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]-[day] [weekday repr:short]");
@@ -86,6 +87,37 @@ pub struct EntryEditor {
     editor_args: Vec<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+struct PublicKeys {
+    keys: Vec<String>,
+}
+
+impl PublicKeys {
+    fn new(journal_path: &str) -> Result<Self, JournalError> {
+        let mut keys_path = PathBuf::new();
+        keys_path.push(journal_path);
+        keys_path.push("metadata.json");
+
+        let file = File::open(keys_path).map_err(|e| {
+            JournalError::chain(&[
+                ErrorKind::Encryption,
+                ErrorKind::FileReadError,
+                ErrorKind::Wrapped(e.to_string()),
+            ])
+        })?;
+        let reader = BufReader::new(file);
+        let public_keys: Self = serde_json::from_reader(reader).map_err(|e| {
+            JournalError::chain(&[
+                ErrorKind::Encryption,
+                ErrorKind::FileReadError,
+                ErrorKind::Wrapped(e.to_string()),
+            ])
+        })?;
+
+        Ok(public_keys)
+    }
+}
+
 impl EntryEditor {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
         let (editor, editor_args) =
@@ -106,76 +138,19 @@ impl EntryEditor {
         decrypted_path: Option<P>,
         text: Option<&str>,
     ) -> Result<(), JournalError> {
-        let file = if let Some(path) = decrypted_path {
-            let stdin_file =
+        let public_keys = PublicKeys::new(&self.journal_path)?;
+
+        if let Some(path) = decrypted_path {
+            let mut input =
                 File::open(path).map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
-            Some(stdin_file)
-        } else if text.is_some() {
-            None
+            encrypt(public_keys.keys, &mut input, encrypted_path)?;
+        } else if let Some(text) = text {
+            let mut input = BufReader::new(text.as_bytes());
+            encrypt(public_keys.keys, &mut input, encrypted_path)?;
         } else {
             panic!("encrypt() MUST have exactly one of decrypted_path or text passed")
         };
-        let mut command = Command::new("ragenix");
-        command
-            .args([
-                "--identity",
-                &self.identity,
-                "--rules",
-                "./rules.nix",
-                "--editor",
-                "-",
-                "--edit",
-            ])
-            .current_dir(&self.journal_path)
-            .arg(encrypted_path.as_ref());
 
-        if let Some(stdin_file) = file {
-            command.stdin(stdin_file);
-        } else if text.is_some() {
-            command.stdin(Stdio::piped());
-        } else {
-            panic!("This condition is already checked; we shouldn't get here")
-        }
-
-        if let Ok(mut child) = command.spawn() {
-            if let Some(stdin_text) = text {
-                let subproc_stdin = stdin_text.to_owned();
-                let mut stdin = child
-                    .stdin
-                    .take()
-                    .expect("child stdin should be retrievable");
-                std::thread::spawn(move || {
-                    let _ = stdin.write_all(subproc_stdin.as_bytes()).map_err(|_| {
-                        JournalError::chain(&[
-                            ErrorKind::Subprocess,
-                            ErrorKind::FileWriteError,
-                            ErrorKind::Wrapped(
-                                "Failed to send data to ragenix to encrypt".to_string(),
-                            ),
-                        ])
-                    });
-                });
-            }
-            if let Ok(status) = child.wait() {
-                if !status.success() {
-                    let message = format!("ragenix exited with code {:?}", status.code());
-                    return Err(JournalError::chain(&[
-                        ErrorKind::Subprocess,
-                        ErrorKind::Wrapped(message),
-                    ]));
-                }
-            } else {
-                return Err(JournalError::chain(&[
-                    ErrorKind::Subprocess,
-                    ErrorKind::Wrapped("Failed to wait for ragenix to complete".to_string()),
-                ]));
-            }
-        } else {
-            return Err(JournalError::chain(&[
-                ErrorKind::Subprocess,
-                ErrorKind::Wrapped("Failed to execute ragenix to encrypt entry".to_string()),
-            ]));
-        }
         Ok(())
     }
 

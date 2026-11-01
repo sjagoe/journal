@@ -1,10 +1,11 @@
 use std::{
-    io::{self, BufReader},
+    fs::OpenOptions,
+    io::{self, BufReader, Read},
     path::Path,
 };
 
 use age::{
-    armor::ArmoredReader,
+    armor::{ArmoredReader, ArmoredWriter, Format},
     cli_common::{
         StdinGuard,
         file_io::{InputReader, OutputFormat, OutputWriter},
@@ -61,4 +62,44 @@ pub(super) fn decrypt<P: AsRef<Path>>(
                 .map_err(|_| JournalError::Error(ErrorKind::FileWriteError))?;
             Ok(())
         })
+}
+
+// let unencrypted_data: BufReader::new(value.as_bytes()),
+pub(super) fn encrypt<P: AsRef<Path>>(
+    recipient_keys: Vec<String>,
+    input: &mut dyn Read,
+    encrypted_path: P,
+) -> Result<(), JournalError> {
+    let mut stdin_guard = StdinGuard::new(true);
+    let recipients =
+        age::cli_common::read_recipients(recipient_keys, vec![], vec![], None, &mut stdin_guard)
+            .map_err(|_| JournalError::chain(&[ErrorKind::EncryptionPipeline]))?;
+
+    let format = Format::AsciiArmor;
+
+    let encryptor = age::Encryptor::with_recipients(recipients.iter().map(|r| r.as_ref() as _))
+        .map_err(|_| JournalError::chain(&[ErrorKind::EncryptionPipeline]))?;
+
+    let output = OpenOptions::new()
+        .truncate(true)
+        .write(true)
+        .create(true)
+        .open(&encrypted_path)
+        .map_err(|_| JournalError::chain(&[ErrorKind::EncryptionPipeline]))?;
+
+    let mut output = encryptor
+        .wrap_output(
+            ArmoredWriter::wrap_output(output, format)
+                .map_err(|_| JournalError::chain(&[ErrorKind::EncryptionPipeline]))?,
+        )
+        .map_err(|_| JournalError::chain(&[ErrorKind::EncryptionPipeline]))?;
+
+    io::copy(input, &mut output).map_err(|_| JournalError::chain(&[ErrorKind::Encryption]))?;
+
+    output
+        .finish()
+        .and_then(|armor| armor.finish())
+        .map_err(|_| JournalError::chain(&[ErrorKind::Encryption]))?;
+
+    Ok(())
 }
