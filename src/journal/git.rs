@@ -46,8 +46,19 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
         repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents[..])?
     };
 
-    let head = repo.head()?;
-    let branch = head.shorthand().unwrap_or("main");
+    let branch = match repo.head() {
+        Ok(head) => {
+            let value = head.shorthand().unwrap_or("main");
+            value.to_owned()
+        }
+        Err(e) => {
+            if e.code() == git2::ErrorCode::UnbornBranch {
+                "main".to_string()
+            } else {
+                return Err(Box::new(e));
+            }
+        }
+    };
 
     repo.reference(&format!("refs/heads/{}", branch), commit_oid, true, message)?;
 
