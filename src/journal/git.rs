@@ -64,3 +64,48 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use super::*;
+
+    #[test]
+    fn test_commit() {
+        let dir = tempfile::tempdir().expect("Unable to create temp dir");
+
+        let repo = Repository::init(&dir).expect("Unable to init repository");
+
+        let mut repo_config = repo.config().expect("Unable to get git repo config");
+        repo_config.set_bool("commit.gpgsign", false).unwrap();
+
+        let mut index = repo.index().expect("Couldn't get git index");
+
+        let new_file_name = Path::new("new-file");
+        let mut new_file_path = PathBuf::new();
+        new_file_path.push(&dir);
+        new_file_path.push(&new_file_name);
+
+        std::fs::write(&new_file_path, b"content").expect("Failed to create file");
+
+        index.add_path(&new_file_name).expect("Failed to add to index");
+
+        let expected_message = "commit message";
+        commit(&repo, expected_message).expect("Failed to commit");
+
+        let head = repo.head().unwrap();
+
+        assert_eq!(head.is_branch(), true);
+
+        let ref_name = head.name().unwrap();
+
+        assert_eq!(ref_name, "refs/heads/main");
+
+        let commit = head.peel_to_commit().unwrap();
+
+        let commit_message = commit.message().unwrap();
+
+        assert_eq!(commit_message, expected_message);
+    }
+}
