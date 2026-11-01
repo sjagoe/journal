@@ -2,6 +2,15 @@
 {
   description = "Age-encrypted journaling";
 
+  nixConfig = {
+    extra-substituters = [
+      "https://sjagoe-packages.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "sjagoe-packages.cachix.org-1:wtDD8fwCJrOoT8TNxKjG8R9rwT0WSmzA3Es0ouLCc2w="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
