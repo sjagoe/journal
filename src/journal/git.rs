@@ -32,6 +32,17 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
 
     let config = repo.config()?;
 
+    let default_branch = match config.get_string("init.defaultBranch") {
+        Ok(name) => name,
+        Err(e) => {
+            if e.code() == git2::ErrorCode::NotFound {
+                "master".to_string()
+            } else {
+                return Err(Box::new(e));
+            }
+        }
+    };
+
     let commit_oid = if config.get_bool("commit.gpgsign")? {
         let commit_content = repo.commit_create_buffer(&sig, &sig, message, &tree, &parents)?;
         let mut signature = Vec::new();
@@ -48,12 +59,12 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
 
     let branch = match repo.head() {
         Ok(head) => {
-            let value = head.shorthand().unwrap_or("main");
+            let value = head.shorthand().unwrap_or(&default_branch);
             value.to_owned()
         }
         Err(e) => {
             if e.code() == git2::ErrorCode::UnbornBranch {
-                "main".to_string()
+                default_branch
             } else {
                 return Err(Box::new(e));
             }
@@ -79,6 +90,10 @@ mod tests {
 
         let mut repo_config = repo.config().expect("Unable to get git repo config");
         repo_config.set_bool("commit.gpgsign", false).unwrap();
+        repo_config.set_str("user.name", "Test User").unwrap();
+        repo_config
+            .set_str("user.email", "user@example.test")
+            .unwrap();
 
         let mut index = repo.index().expect("Couldn't get git index");
 
@@ -102,7 +117,7 @@ mod tests {
 
         let ref_name = head.name().unwrap();
 
-        assert_eq!(ref_name, "refs/heads/main");
+        assert_eq!(ref_name, "refs/heads/master");
 
         let commit = head.peel_to_commit().unwrap();
 
