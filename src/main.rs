@@ -1,4 +1,5 @@
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::{fs::File, time::Duration};
 
 use color_eyre::Result;
@@ -7,6 +8,7 @@ use dirs::config_dir;
 use crossterm::event::{self, Event as CrosstermEvent, KeyEventKind};
 use errors::{ErrorKind, JournalError};
 use ratatui::{Terminal, backend::Backend};
+use clap::Parser;
 
 mod app;
 mod config;
@@ -20,12 +22,30 @@ use crate::{app::App, config::Config, ui::ui};
 
 const APP_NAME: &str = "personal-journal";
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Configuration file to use
+    #[arg(short, long)]
+    config: Option<String>,
+}
+
+
 fn main() -> Result<()> {
     errors::install_hooks()?;
 
-    let mut config_path = config_dir().unwrap();
-    config_path.push(APP_NAME);
-    config_path.push("config.json");
+    let args = Args::parse();
+
+    let config_path = if let Some(config) = args.config {
+        let mut config_path = PathBuf::new();
+        config_path.push(config);
+        config_path
+    } else {
+        let mut config_path = config_dir().unwrap();
+        config_path.push(APP_NAME);
+        config_path.push("config.json");
+        config_path
+    };
 
     let file = File::open(config_path)?;
     let reader = BufReader::new(file);
