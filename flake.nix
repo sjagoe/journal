@@ -90,7 +90,7 @@
           # cache misses when building individual top-level-crates
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-          journal = craneLib.buildPackage commonArgs // {
+          journal = craneLib.buildPackage (commonArgs // {
             inherit cargoArtifacts;
             inherit src;
             inherit (craneLib.crateNameFromCargoToml {
@@ -98,7 +98,7 @@
             }) version;
             # NB: we disable tests since we'll run them all via cargo-nextest
             doCheck = false;
-          };
+          });
         in
           {
             checks = {
