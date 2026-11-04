@@ -80,13 +80,17 @@ pub fn commit(repo: &Repository, message: &str) -> Result<(), Box<dyn error::Err
 mod tests {
     use std::path::{Path, PathBuf};
 
+    use git2::RepositoryInitOptions;
+
     use super::*;
 
     #[test]
     fn test_commit() {
         let dir = tempfile::tempdir().expect("Unable to create temp dir");
 
-        let repo = Repository::init(&dir).expect("Unable to init repository");
+        let mut init_opts = RepositoryInitOptions::new();
+        init_opts.initial_head("master");
+        let repo = Repository::init_opts(&dir, &init_opts).expect("Unable to init repository");
 
         let mut repo_config = repo.config().expect("Unable to get git repo config");
         repo_config.set_bool("commit.gpgsign", false).unwrap();
