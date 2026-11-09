@@ -103,3 +103,63 @@ pub(super) fn encrypt<P: AsRef<Path>>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use age::secrecy::ExposeSecret;
+    use age::x25519::Identity;
+
+    use super::*;
+
+    #[test]
+    fn test_load_identities() {
+        let test_identity = Identity::generate();
+        let dir = tempfile::tempdir().expect("Unable to create temp dir");
+
+        let mut identity_file = PathBuf::new();
+        identity_file.push(&dir);
+        identity_file.push("identity");
+
+        let secret_string = test_identity.to_string();
+        let identity_secret = secret_string.expose_secret();
+
+        std::fs::write(&identity_file, &identity_secret).unwrap();
+
+        let identity_path_str = identity_file.into_string().unwrap();
+        let identities = load_identities(&identity_path_str).unwrap();
+
+        assert_eq!(identities.len(), 1);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt() {
+        let key = Identity::generate();
+        let pubkey = key.to_public().to_string();
+
+        let dir = tempfile::tempdir().expect("Unable to create temp dir");
+
+        let mut path = PathBuf::new();
+        path.push(&dir);
+        path.push("encrypted");
+
+        let content = "content";
+        let mut encrypt_input = BufReader::new(content.as_bytes());
+
+        encrypt(vec![pubkey], &mut encrypt_input, &path).unwrap();
+
+        let mut decrypt_path = PathBuf::new();
+        decrypt_path.push(&dir);
+        decrypt_path.push("decrypted");
+
+        let mut identities: Vec<Box<dyn age::Identity>> = Vec::new();
+        identities.push(Box::new(key));
+
+        decrypt(&path, &decrypt_path, &identities).unwrap();
+
+        let decrypted_content = std::fs::read_to_string(&decrypt_path).unwrap();
+
+        assert_eq!(decrypted_content, content);
+    }
+}
