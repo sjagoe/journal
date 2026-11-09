@@ -1,4 +1,4 @@
-use std::error;
+use std::{error, path::PathBuf};
 
 use git2::{ErrorCode, Repository};
 use gpgme::{Context, Protocol};
@@ -8,6 +8,15 @@ fn sign_commit(commit_content: &[u8], signature: &mut Vec<u8>) -> Result<(), gpg
     ctx.set_armor(true);
     ctx.sign_detached(commit_content, signature)?;
 
+    Ok(())
+}
+
+pub fn git_index_add(repo: &Repository, filename: &str) -> Result<(), git2::Error> {
+    let mut filepath = PathBuf::new();
+    filepath.push(filename);
+    let mut index = repo.index()?;
+    index.add_path(&filepath)?;
+    index.write()?;
     Ok(())
 }
 
