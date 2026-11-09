@@ -318,7 +318,7 @@ impl<'a> App<'a> {
 
     fn git_remove_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let action = |journal: &Journal, repo: &Repository| {
-            journal.git_index_remove_entry(repo, kind, entry)
+            journal.git_index_unstage_entry(repo, kind, entry)
         };
 
         self.git_index_entry(&action)?;

@@ -1,7 +1,7 @@
 use std::path::Path;
-use std::path::PathBuf;
 
-use git2::{Index, Repository, Status};
+use git::git_index_add;
+use git2::{Repository, Status};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use walkdir::WalkDir;
@@ -177,51 +177,6 @@ impl Journal {
         }
     }
 
-    fn git_index(
-        &self,
-        repo: &Repository,
-        filename: &str,
-        action: &dyn Fn(&mut Index, &PathBuf) -> Result<(), git2::Error>,
-    ) -> Result<(), JournalError> {
-        let mut filepath = PathBuf::new();
-        filepath.push(filename);
-        match repo.index() {
-            Ok(mut index) => {
-                if let Some(err) = action(&mut index, &filepath).err() {
-                    return Err(JournalError::chain(&[
-                        ErrorKind::GitIndexError,
-                        ErrorKind::Wrapped(err.to_string()),
-                    ]));
-                }
-                if let Some(err) = index.write().err() {
-                    return Err(JournalError::chain(&[
-                        ErrorKind::GitIndexError,
-                        ErrorKind::Wrapped(err.to_string()),
-                    ]));
-                }
-                Ok(())
-            }
-            Err(err) => Err(JournalError::chain(&[
-                ErrorKind::GitIndexError,
-                ErrorKind::Wrapped(err.to_string()),
-            ])),
-        }
-    }
-
-    pub fn git_index_remove(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
-        let action = |index: &mut Index, filepath: &PathBuf| -> Result<(), git2::Error> {
-            index.remove_path(filepath)
-        };
-        self.git_index(repo, filename, &action)
-    }
-
-    pub fn git_index_add(&self, repo: &Repository, filename: &str) -> Result<(), JournalError> {
-        let action = |index: &mut Index, filepath: &PathBuf| -> Result<(), git2::Error> {
-            index.add_path(filepath)
-        };
-        self.git_index(repo, filename, &action)
-    }
-
     pub fn git_index_add_entry(
         &self,
         repo: &Repository,
@@ -229,16 +184,31 @@ impl Journal {
         entry: &str,
     ) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
-        self.git_index_add(repo, &filename)
+        git_index_add(repo, &filename).map_err(|err| {
+            JournalError::chain(&[
+                ErrorKind::GitIndexError,
+                ErrorKind::Wrapped(err.to_string()),
+            ])
+        })
     }
 
-    pub fn git_index_remove_entry(
+    pub fn git_index_unstage_entry(
         &self,
         repo: &Repository,
         kind: &EntryKind,
         entry: &str,
     ) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
-        self.git_index_remove(repo, &filename)
+        let action = || -> Result<(), git2::Error> {
+            let tree = repo.revparse_single("HEAD")?;
+            repo.reset_default(Some(&tree), &[filename])?;
+            Ok(())
+        };
+        action().map_err(|err| {
+            JournalError::chain(&[
+                ErrorKind::GitIndexError,
+                ErrorKind::Wrapped(err.to_string()),
+            ])
+        })
     }
 }
