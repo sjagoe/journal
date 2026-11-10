@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use std::{fs::File, time::Duration};
 
 use color_eyre::Result;
+use color_eyre::eyre::eyre;
 use dirs::config_dir;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use crossterm::event::{self, Event as CrosstermEvent, KeyEventKind};
 use errors::{ErrorKind, JournalError};
 use ratatui::{Terminal, backend::Backend};
@@ -22,12 +23,23 @@ use crate::{app::App, config::Config, ui::ui};
 
 const APP_NAME: &str = "personal-journal";
 
-#[derive(Parser, Debug)]
+#[derive(Clone, Subcommand, Debug)]
+enum RekeyCommand {
+    ReKey {
+        /// The new encryption key, to update configuration
+        new_key: String,
+    },
+}
+
+#[derive(Parser, Clone, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Configuration file to use
     #[arg(short, long)]
     config: Option<String>,
+    /// Re-key the repository
+    #[command(subcommand)]
+    re_key: Option<RekeyCommand>,
 }
 
 fn main() -> Result<()> {
@@ -46,13 +58,41 @@ fn main() -> Result<()> {
         config_path
     };
 
-    let file = File::open(config_path)?;
+    let file = File::open(&config_path)?;
     let reader = BufReader::new(file);
     let config: Config = serde_json::from_reader(reader)?;
 
     println!("{}", config);
 
     let mut app: app::App = app::App::new(&config)?;
+
+    if let Some(rk) = args.re_key {
+        match rk {
+            RekeyCommand::ReKey { new_key } => {
+                let mut path = PathBuf::new();
+                path.push(new_key);
+                let new_key_path = std::path::absolute(&path)?;
+                if !new_key_path.is_file() {
+                    return Err(eyre!("{} is not a file", &new_key_path.display()));
+                }
+                app.re_key(&new_key_path)?;
+
+                let config = match new_key_path.as_os_str().to_str() {
+                    Some(new_key) => config.with_new_identity(new_key.to_string()),
+                    None => panic!("Failed to store new key in config"),
+                };
+
+                let mut new_config_path = PathBuf::new();
+                new_config_path.push(&config_path);
+                new_config_path.set_extension("rekey.tmp");
+                let j = serde_json::to_vec_pretty(&config)?;
+                std::fs::write(&new_config_path, &j)?;
+                std::fs::rename(&new_config_path, &config_path)?;
+
+                return Ok(());
+            }
+        }
+    }
 
     let mut terminal = tui::init()?;
     run_app(&mut terminal, &mut app)?;

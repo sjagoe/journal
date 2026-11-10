@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub editor: Option<String>,
     pub identity: String,
@@ -12,6 +12,18 @@ pub struct Config {
     // Map action name to list of key bindings
     // e.g NavigateNext can be mapped to both C-n and Down
     pub key_map: HashMap<String, Vec<String>>,
+}
+
+impl Config {
+    pub fn with_new_identity(&self, identity: String) -> Self {
+        Self {
+            editor: self.editor.clone(),
+            identity,
+            journal_path: self.journal_path.to_owned(),
+            export: self.export.clone(),
+            key_map: self.key_map.clone(),
+        }
+    }
 }
 
 impl fmt::Display for Config {

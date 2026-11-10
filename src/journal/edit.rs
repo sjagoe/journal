@@ -88,12 +88,12 @@ pub struct EntryEditor {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
-struct PublicKeys {
-    keys: Vec<String>,
+pub struct PublicKeys {
+    pub keys: Vec<String>,
 }
 
 impl PublicKeys {
-    fn new(journal_path: &str) -> Result<Self, JournalError> {
+    pub fn new(journal_path: &str) -> Result<Self, JournalError> {
         let mut keys_path = PathBuf::new();
         keys_path.push(journal_path);
         keys_path.push("metadata.json");
