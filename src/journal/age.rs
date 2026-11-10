@@ -14,11 +14,12 @@ use age::{
 
 use crate::errors::{ErrorKind, JournalError};
 
-pub(super) fn load_identities(identity: &str) -> Result<Vec<Box<dyn age::Identity>>, JournalError> {
+pub(super) fn load_identities(
+    identities: &[String],
+) -> Result<Vec<Box<dyn age::Identity>>, JournalError> {
     let mut stdin_guard = StdinGuard::new(true);
-    let identities =
-        age::cli_common::read_identities(vec![identity.to_string()], None, &mut stdin_guard)
-            .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
+    let identities = age::cli_common::read_identities(identities.to_vec(), None, &mut stdin_guard)
+        .map_err(|_| JournalError::Error(ErrorKind::Decryption))?;
 
     Ok(identities)
 }

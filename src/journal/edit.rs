@@ -81,7 +81,7 @@ fn get_editor_command(
 }
 
 pub struct EntryEditor {
-    pub(super) identity: String,
+    pub(super) identities: Vec<String>,
     pub(super) journal_path: String,
     editor: String,
     editor_args: Vec<String>,
@@ -124,7 +124,7 @@ impl EntryEditor {
             get_editor_command(config.editor.as_ref().map(|editor| editor.to_owned()))?;
 
         let entry_editor = EntryEditor {
-            identity: config.identity.to_owned(),
+            identities: config.get_identities(),
             editor,
             editor_args,
             journal_path: config.journal_path.to_owned(),
@@ -192,7 +192,7 @@ impl EntryEditor {
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
-        let identities = load_identities(&self.identity)?;
+        let identities = load_identities(&self.identities)?;
         let input_path = dir.path().join("input.org");
 
         decrypt(encrypted_file_path, &input_path.clone(), &identities).map_err(
