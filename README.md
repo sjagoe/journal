@@ -34,7 +34,9 @@ exit  # exit the "nix shell" sub-shell
 
 ```json
 {
-  "identity": "/home/USERNAME/.age/age-personal",
+  "identities": [
+    "/home/USERNAME/.age/age-personal"
+  ],
   "journal_path": "/home/USERNAME/journal-entries",
   "editor": "emacsclient --create-frame",
   "export": "firefox-release --new-window"
