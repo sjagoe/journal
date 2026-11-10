@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crossterm::event::KeyEvent;
 use git2::Repository;
 use input::{InputHandler, InputMode};
@@ -26,7 +28,9 @@ use crate::{
     },
     config::Config,
     errors::{ErrorKind, JournalError},
-    journal::{EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git},
+    journal::{
+        EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git, rekey::EntryReKey,
+    },
     traits::{Drawable, Navigable},
     ui::centered_rect,
 };
@@ -523,5 +527,11 @@ impl<'a> App<'a> {
 
     pub fn error(&mut self, error: JournalError) {
         self.mode = InputMode::Error(error);
+    }
+
+    pub fn re_key(&mut self, new_key_path: &Path) -> Result<(), JournalError> {
+        let mut re_key = EntryReKey::new(&self.config)?;
+        re_key.re_key_repository(&self.journal, new_key_path)?;
+        Ok(())
     }
 }

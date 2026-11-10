@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{iter::chain, path::Path};
 
 use git::git_index_add;
 use git2::{Repository, Status};
@@ -11,6 +11,7 @@ mod changes;
 pub(crate) mod edit;
 pub(crate) mod export;
 pub(crate) mod git;
+pub(crate) mod rekey;
 
 use crate::errors::{ErrorKind, JournalError};
 
@@ -22,6 +23,7 @@ const ENTRY_DIRECTORY_NARRATIVE: &str = "narrative";
 
 #[derive(Clone, Debug)]
 pub enum EntryKind {
+    Document,
     General,
     Narrative,
 }
@@ -29,6 +31,7 @@ pub enum EntryKind {
 impl From<&EntryKind> for String {
     fn from(val: &EntryKind) -> String {
         match val {
+            EntryKind::Document => ENTRY_DIRECTORY_DOCUMENT.to_owned(),
             EntryKind::General => ENTRY_DIRECTORY_GENERAL.to_owned(),
             EntryKind::Narrative => ENTRY_DIRECTORY_NARRATIVE.to_owned(),
         }
@@ -65,7 +68,7 @@ impl JournalEntry {
 
 #[derive(Clone, Debug)]
 pub struct JournalSection {
-    pub _kind: EntryKind,
+    pub kind: EntryKind,
     pub entries: Vec<JournalEntry>,
 }
 
@@ -88,10 +91,7 @@ impl JournalSection {
             .collect();
         entries.sort_by(|a, b| b.name.cmp(&a.name));
 
-        JournalSection {
-            _kind: kind,
-            entries,
-        }
+        JournalSection { kind, entries }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -100,6 +100,12 @@ impl JournalSection {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    fn iter_files(&self) -> impl Iterator<Item = std::string::String> {
+        self.entries
+            .iter()
+            .map(|entry| entry_filename(&self.kind, &entry.name))
     }
 }
 
@@ -154,6 +160,10 @@ fn load_entries_from_path(path: &str) -> SerializedEntries {
 }
 
 impl Journal {
+    pub fn iter_files(&self) -> impl Iterator<Item = std::string::String> {
+        chain(self.general.iter_files(), self.narrative.iter_files())
+    }
+
     pub fn from_file(path: &str, repo: &Repository) -> Journal {
         let entries = load_entries_from_path(path);
 
@@ -174,6 +184,7 @@ impl Journal {
         match kind {
             EntryKind::General => &self.general,
             EntryKind::Narrative => &self.narrative,
+            EntryKind::Document => todo!("Document view not implemented yet"),
         }
     }
 
