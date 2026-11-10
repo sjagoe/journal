@@ -13,7 +13,7 @@ enum Identities {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub editor: Option<String>,
-    #[serde(alias="identity")]
+    #[serde(alias = "identity")]
     identities: Identities,
     pub journal_path: String,
     pub export: Option<String>,
@@ -28,9 +28,7 @@ impl Config {
             Identities::One(ref old) => {
                 vec![old.to_owned()]
             }
-            Identities::Multiple(ref identities) => {
-                identities.clone()
-            }
+            Identities::Multiple(ref identities) => identities.clone(),
         }
     }
 
