@@ -204,7 +204,7 @@ impl EntryExporter {
         fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
-        let identities = load_identities(&self.entry_editor.identity)?;
+        let identities = load_identities(&self.entry_editor.identities)?;
         let input_path = self.decrypted_path();
 
         let target_style_path = self.dir.path().join("style.css.org");

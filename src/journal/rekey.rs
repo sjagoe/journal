@@ -19,7 +19,7 @@ use super::{
 };
 
 pub struct EntryReKey {
-    identity: String,
+    identities: Vec<String>,
     journal_path: String,
     dir: TempDir,
 }
@@ -32,7 +32,7 @@ impl EntryReKey {
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         Ok(Self {
-            identity: config.identity.to_owned(),
+            identities: config.get_identities(),
             journal_path: config.journal_path.to_owned(),
             dir,
         })
@@ -70,7 +70,7 @@ impl EntryReKey {
         encrypted_file_path: &PathBuf,
         new_key_path: &Path,
     ) -> Result<(), JournalError> {
-        let identities = load_identities(&self.identity)?;
+        let identities = load_identities(&self.identities)?;
         let input_path = self.dir.path().join("input.org");
 
         println!("Re-keying {:?}", encrypted_file_path.display());
@@ -86,7 +86,9 @@ impl EntryReKey {
             })?;
 
         // FIXME
-        let new_identities = load_identities(&new_key_path.as_os_str().to_string_lossy())?;
+        let new_keys: Vec<String> = vec![new_key_path.as_os_str().to_string_lossy().to_string()];
+        // We test with only the new identity to ensure the rekey has worked
+        let new_identities = load_identities(&new_keys)?;
         decrypt(&output_path, &input_path, &new_identities).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
         })?;
