@@ -8,9 +8,8 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     prelude::Modifier,
     style::{Color, Style},
-    symbols,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Clear, LineGauge, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 use time::macros::format_description;
@@ -20,11 +19,13 @@ mod actions;
 mod entries_page;
 mod input;
 mod pagination;
+mod progress_spinner;
 
 use crate::{
     app::{
         actions::Action,
         entries_page::{ActivePane, EntriesPage},
+        progress_spinner::ProgressSpinner,
     },
     config::Config,
     errors::{ErrorKind, JournalError},
@@ -123,18 +124,19 @@ impl<'a> App<'a> {
 
     fn draw_export_progress(&mut self, frame: &mut Frame) {
         if let Some(ref exporter) = self.entry_exporter {
-            let progress = exporter.get_progress();
             let progress_area = centered_rect(
                 Constraint::Percentage(60),
-                Constraint::Length(3),
+                Constraint::Length(5),
                 frame.area(),
             );
 
-            let progress_bar = LineGauge::default()
-                .block(Block::bordered().title(" Exporting ... "))
-                .filled_style(Style::new().white().on_black().bold())
-                .filled_symbol(symbols::block::FULL)
-                .ratio(progress);
+            let mut progress_bar = ProgressSpinner::default();
+            if let InputMode::ExportEntry(_) = self.mode {
+                let progress = exporter.get_progress();
+                progress_bar = progress_bar.value(progress);
+            } else {
+                progress_bar = progress_bar.complete();
+            }
 
             frame.render_widget(Clear, progress_area);
             frame.render_widget(progress_bar, progress_area);
@@ -170,7 +172,9 @@ impl<'a> App<'a> {
         match self.mode {
             InputMode::Error(ref error) => self.display_error(frame, error),
             InputMode::NewEntry(_) | InputMode::Commit(_) => self.input_handler.render_input(frame),
-            InputMode::ExportEntry(_) => self.draw_export_progress(frame),
+            InputMode::ExportEntry(_) | InputMode::ExportEntryComplete(_) => {
+                self.draw_export_progress(frame)
+            }
             _ => {}
         }
 
@@ -479,6 +483,12 @@ impl<'a> App<'a> {
             }
 
             Action::NextMode(mode) => {
+                match self.mode {
+                    InputMode::ExportEntryComplete(_) => {
+                        self.entry_exporter = None;
+                    }
+                    _ => {}
+                }
                 self.mode = mode;
             }
 
@@ -495,8 +505,7 @@ impl<'a> App<'a> {
             match exporter.tick(tick_duration) {
                 Ok(export_complete) => {
                     if export_complete {
-                        self.mode = InputMode::Ready(None);
-                        self.entry_exporter = None;
+                        self.mode = InputMode::ExportEntryComplete(None);
                     }
                 }
                 Err(e) => {

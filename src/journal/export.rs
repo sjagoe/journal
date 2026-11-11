@@ -3,6 +3,7 @@ use std::{
     os::unix::fs::{PermissionsExt, symlink},
     path::PathBuf,
     process::{Child, Command},
+    time::{Duration, Instant},
 };
 
 use color_eyre::Result;
@@ -31,6 +32,7 @@ pub struct EntryExporter {
     entry_editor: EntryEditor,
     dir: TempDir,
     export_process: Option<ExportProcess>,
+    launch_started: Option<Instant>,
     export_command: String,
     export_command_args: Vec<String>,
 }
@@ -60,6 +62,7 @@ impl EntryExporter {
             entry_editor,
             dir,
             export_process: None,
+            launch_started: None,
             export_command,
             export_command_args,
         };
@@ -103,12 +106,20 @@ impl EntryExporter {
 
     pub fn tick(&mut self, tick_duration: u8) -> Result<bool, JournalError> {
         self.check_progress()?;
-        let mut update_progress = |factor| {
-            if self.progress >= 1.0 {
+        let mut update_progress = || {
+            // Give the export launch a moment to happen.
+            // xdg-open and browsers launching a tab in an open
+            // session usually return control before the command has
+            // been executed.
+            if let Some(launch_started) = self.launch_started
+                && launch_started.elapsed() > Duration::from_millis(1500)
+            {
                 true
             } else {
+                let factor = 1000.0;
                 let duration: f64 = tick_duration.into();
-                let new = self.progress + (duration / factor);
+                let elapsed = duration / factor;
+                let new = self.progress + elapsed;
                 self.progress = new;
                 false
             }
@@ -116,28 +127,24 @@ impl EntryExporter {
         if let Some(ref export_process) = self.export_process {
             match export_process {
                 ExportProcess::Export(_) => {
-                    // Just long progress bars .. we don't really have
-                    // anything to go on to monitor progress
-                    let _ = update_progress(10000.0);
+                    let _ = update_progress();
                     return Ok(false);
                 }
                 _ => {
-                    return Ok(update_progress(1000.0));
+                    return Ok(update_progress());
                 }
             }
         }
-        Ok(update_progress(1000.0))
+        Ok(update_progress())
     }
 
     pub fn get_progress(&self) -> f64 {
-        if self.progress >= 1.0 {
-            1.0
-        } else {
-            self.progress
-        }
+        self.progress
     }
 
     fn spawn_browser(&mut self, exported_path: &PathBuf) -> Result<(), JournalError> {
+        self.launch_started = Some(Instant::now());
+
         let mut command = Command::new(&self.export_command);
         command.args(&self.export_command_args);
         command.arg(exported_path);
