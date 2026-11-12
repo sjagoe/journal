@@ -195,11 +195,9 @@ impl EntryEditor {
         let identities = load_identities(&self.identities)?;
         let input_path = dir.path().join("input.org");
 
-        decrypt(encrypted_file_path, &input_path.clone(), &identities).map_err(
-            |err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
-            },
-        )?;
+        decrypt(encrypted_file_path, input_path.clone(), &identities).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
+        })?;
 
         let pre_edit_hash = sha256(&input_path).map_err(|_| {
             JournalError::chain(&[

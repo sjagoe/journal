@@ -28,6 +28,7 @@ pub(super) enum InputMode {
     Ready(Option<InputChain>),
     NewEntry(Option<InputChain>),
     ExportEntry(Option<InputChain>),
+    ExportEntryComplete(Option<InputChain>),
     Commit(Option<InputChain>),
     Error(JournalError),
 }
@@ -169,13 +170,17 @@ impl<'a> InputHandler<'a> {
         mode: &InputMode,
         event: &KeyEvent,
     ) -> Result<Action, JournalError> {
+        let input_chain = |maybe_input: &Option<InputChain>| -> InputChain {
+            if let Some(input) = maybe_input {
+                input.chain(event)
+            } else {
+                InputChain::from(event)
+            }
+        };
+
         match mode {
             InputMode::Ready(maybe_input) => {
-                let input = if let Some(input) = maybe_input {
-                    input.chain(event)
-                } else {
-                    InputChain::from(event)
-                };
+                let input = input_chain(maybe_input);
                 return Ok(self.handle_chained_input(&input));
             }
             InputMode::NewEntry(maybe_input) | InputMode::Commit(maybe_input) => {
@@ -220,6 +225,15 @@ impl<'a> InputHandler<'a> {
                 return Ok(action);
             }
             InputMode::ExportEntry(_) => {}
+            InputMode::ExportEntryComplete(maybe_input) => {
+                let input = input_chain(maybe_input);
+                return match self.key_map.action(&input) {
+                    KeyMapAction::Action(
+                        Action::NavigateBack | Action::ActivateSelectedEntry | Action::AppExit,
+                    ) => Ok(Action::NextMode(InputMode::Ready(None))),
+                    _ => Ok(Action::NoOp),
+                };
+            }
             InputMode::Error(_) => return Ok(Action::NavigateBack),
         }
         Ok(Action::NoOp)

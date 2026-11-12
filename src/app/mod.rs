@@ -8,9 +8,8 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     prelude::Modifier,
     style::{Color, Style},
-    symbols,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Clear, LineGauge, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 
 use time::macros::format_description;
@@ -20,11 +19,13 @@ mod actions;
 mod entries_page;
 mod input;
 mod pagination;
+mod progress_spinner;
 
 use crate::{
     app::{
         actions::Action,
         entries_page::{ActivePane, EntriesPage},
+        progress_spinner::ProgressSpinner,
     },
     config::Config,
     errors::{ErrorKind, JournalError},
@@ -123,18 +124,19 @@ impl<'a> App<'a> {
 
     fn draw_export_progress(&mut self, frame: &mut Frame) {
         if let Some(ref exporter) = self.entry_exporter {
-            let progress = exporter.get_progress();
             let progress_area = centered_rect(
                 Constraint::Percentage(60),
-                Constraint::Length(3),
+                Constraint::Length(5),
                 frame.area(),
             );
 
-            let progress_bar = LineGauge::default()
-                .block(Block::bordered().title(" Exporting ... "))
-                .filled_style(Style::new().white().on_black().bold())
-                .filled_symbol(symbols::block::FULL)
-                .ratio(progress);
+            let mut progress_bar = ProgressSpinner::default();
+            if let InputMode::ExportEntry(_) = self.mode {
+                let progress = exporter.get_progress();
+                progress_bar = progress_bar.value(progress);
+            } else {
+                progress_bar = progress_bar.complete();
+            }
 
             frame.render_widget(Clear, progress_area);
             frame.render_widget(progress_bar, progress_area);
@@ -170,7 +172,9 @@ impl<'a> App<'a> {
         match self.mode {
             InputMode::Error(ref error) => self.display_error(frame, error),
             InputMode::NewEntry(_) | InputMode::Commit(_) => self.input_handler.render_input(frame),
-            InputMode::ExportEntry(_) => self.draw_export_progress(frame),
+            InputMode::ExportEntry(_) | InputMode::ExportEntryComplete(_) => {
+                self.draw_export_progress(frame)
+            }
             _ => {}
         }
 
@@ -178,22 +182,6 @@ impl<'a> App<'a> {
             self.display_error(frame, error);
         }
     }
-
-    // pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-    //     let actions = [Event::BackOrExit, Event::Select, Event::New];
-
-    //     let keys_hint = actions
-    //         .iter()
-    //         .map(|a| ActionInfo::from(a).to_string())
-    //         .collect::<Vec<String>>()
-    //         .join(" | ");
-    //     let content = Span::styled(keys_hint, Style::default());
-    //     let block = Block::default()
-    //         .padding(Padding::horizontal(1))
-    //         .style(Style::default().fg(Color::Black).bg(Color::Gray));
-    //     let hint = Paragraph::new(Line::from(content)).block(block);
-    //     f.render_widget(hint, area);
-    // }
 
     fn edit_entry(
         &mut self,
@@ -269,11 +257,24 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    fn begin_export_entry(&mut self) -> Result<(), JournalError> {
+    fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter.start_export().map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-            })?;
+            entry_exporter
+                .export_single_entry(kind, entry)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+                })?;
+        }
+        Ok(())
+    }
+
+    fn begin_export_journal(&mut self) -> Result<(), JournalError> {
+        if let Some(ref mut entry_exporter) = self.entry_exporter {
+            entry_exporter
+                .export_journal(&self.journal)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+                })?;
         }
         Ok(())
     }
@@ -356,12 +357,20 @@ impl<'a> App<'a> {
             Action::ExportEntry => {
                 if let Some(entry) = page.select(&self.journal) {
                     let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                    let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
+                    let entry_exporter = EntryExporter::new(&self.config)?;
                     self.entry_exporter = Some(entry_exporter);
-                    self.begin_export_entry()?;
+                    self.begin_export_entry(&entry_kind, &entry)?;
                     self.mode = InputMode::ExportEntry(None);
                     return Ok(Redraw(false));
                 }
+            }
+
+            Action::ExportJournal => {
+                let entry_exporter = EntryExporter::new(&self.config)?;
+                self.entry_exporter = Some(entry_exporter);
+                self.begin_export_journal()?;
+                self.mode = InputMode::ExportEntry(None);
+                return Ok(Redraw(false));
             }
 
             Action::NameNewEntry => {
@@ -495,6 +504,9 @@ impl<'a> App<'a> {
             }
 
             Action::NextMode(mode) => {
+                if let InputMode::ExportEntryComplete(_) = self.mode {
+                    self.entry_exporter = None;
+                }
                 self.mode = mode;
             }
 
@@ -511,8 +523,7 @@ impl<'a> App<'a> {
             match exporter.tick(tick_duration) {
                 Ok(export_complete) => {
                     if export_complete {
-                        self.mode = InputMode::Ready(None);
-                        self.entry_exporter = None;
+                        self.mode = InputMode::ExportEntryComplete(None);
                     }
                 }
                 Err(e) => {

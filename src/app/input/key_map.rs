@@ -8,9 +8,10 @@ use crate::{app::Action, errors::JournalError};
 
 use super::InputChain;
 
-const DEFAULT_KEYS: [(&str, Action); 20] = [
+const DEFAULT_KEYS: [(&str, Action); 21] = [
     ("C-x", Action::AppExit),
     ("C-e", Action::ExportEntry),
+    ("C-u C-e", Action::ExportJournal),
     ("C-g", Action::NavigateBack),
     ("C-n", Action::NavigateNext),
     ("C-p", Action::NavigatePrevious),
