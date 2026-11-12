@@ -102,6 +102,10 @@ impl JournalSection {
         self.entries.len()
     }
 
+    fn iter_entries(&self) -> impl Iterator<Item = &std::string::String> {
+        self.entries.iter().map(|entry| &entry.name)
+    }
+
     fn iter_files(&self) -> impl Iterator<Item = std::string::String> {
         self.entries
             .iter()
@@ -178,6 +182,10 @@ impl Journal {
             general,
             narrative,
         }
+    }
+
+    pub fn sections(&self) -> [&JournalSection; 2] {
+        [&self.general, &self.narrative]
     }
 
     pub fn section(&self, kind: &EntryKind) -> &JournalSection {

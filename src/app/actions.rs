@@ -15,6 +15,7 @@ pub(super) enum Action {
     DisplayError(JournalError),
 
     ExportEntry,
+    ExportJournal,
     NameNewEntry,
     CreateEntry(String),
     ActivateSelectedEntry,
@@ -49,6 +50,7 @@ impl Display for Action {
             Action::AppExit => "AppExit",
 
             Action::ExportEntry => "ExportEntry",
+            Action::ExportJournal => "ExportJournal",
             Action::NameNewEntry => "NameNewEntry",
             Action::ActivateSelectedEntry => "ActivateSelectedEntry",
 

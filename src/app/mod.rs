@@ -259,9 +259,22 @@ impl<'a> App<'a> {
 
     fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter.export_single_entry(kind, entry).map_err(|err| match err {
-                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-            })?;
+            entry_exporter
+                .export_single_entry(kind, entry)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+                })?;
+        }
+        Ok(())
+    }
+
+    fn begin_export_journal(&mut self) -> Result<(), JournalError> {
+        if let Some(ref mut entry_exporter) = self.entry_exporter {
+            entry_exporter
+                .export_journal(&self.journal)
+                .map_err(|err| match err {
+                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+                })?;
         }
         Ok(())
     }
@@ -350,6 +363,14 @@ impl<'a> App<'a> {
                     self.mode = InputMode::ExportEntry(None);
                     return Ok(Redraw(false));
                 }
+            }
+
+            Action::ExportJournal => {
+                let entry_exporter = EntryExporter::new(&self.config)?;
+                self.entry_exporter = Some(entry_exporter);
+                self.begin_export_journal()?;
+                self.mode = InputMode::ExportEntry(None);
+                return Ok(Redraw(false));
             }
 
             Action::NameNewEntry => {

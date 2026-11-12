@@ -41,9 +41,9 @@ pub(super) fn get_age_decryptor<P: AsRef<Path>>(
     Ok(decryptor)
 }
 
-pub(super) fn decrypt<P: AsRef<Path>>(
-    input_file: P,
-    output_file: P,
+pub(super) fn decrypt<I: AsRef<Path>, O: AsRef<Path>>(
+    input_file: I,
+    output_file: O,
     identities: &[Box<dyn age::Identity>],
 ) -> Result<(), JournalError> {
     let output_file_mode: u32 = 0o600;

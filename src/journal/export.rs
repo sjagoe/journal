@@ -1,7 +1,7 @@
 use std::{
     fs,
     os::unix::fs::{PermissionsExt, symlink},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command},
     time::{Duration, Instant},
 };
@@ -14,7 +14,7 @@ use crate::{
     errors::{ErrorKind, JournalError},
 };
 
-use super::{EntryKind, edit::program_from_string, entry_filename};
+use super::{EntryKind, Journal, edit::program_from_string, entry_filename};
 use super::{
     age::{decrypt, load_identities},
     edit::EntryEditor,
@@ -74,7 +74,9 @@ impl EntryExporter {
                 ExportProcess::Export(child) => {
                     if let Ok(Some(status)) = child.try_wait() {
                         if status.success() {
-                            let exported_path = self.exported_path.as_ref()
+                            let exported_path = self
+                                .exported_path
+                                .as_ref()
                                 .expect("Should have been set at start of export")
                                 .clone();
                             self.export_process = None;
@@ -165,11 +167,11 @@ impl EntryExporter {
 
     fn spawn_exporter<P: AsRef<std::ffi::OsStr>>(
         &mut self,
-        decrypted_paths: &[P],
+        decrypted_path: P,
     ) -> Result<(), JournalError> {
         let mut command = Command::new("emacs");
         command
-            .args(decrypted_paths)
+            .arg(decrypted_path)
             .args([
                 "--batch",
                 "-f",
@@ -193,7 +195,32 @@ impl EntryExporter {
         Ok(())
     }
 
-    pub fn export_single_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+    fn decrypt_item<D: AsRef<Path>, E: AsRef<Path>>(
+        &self,
+        dir: D,
+        encrypted_path: E,
+        identities: &Vec<Box<dyn age::Identity>>,
+    ) -> Result<PathBuf, JournalError> {
+        let mut decrypted = PathBuf::from(dir.as_ref());
+        let filename = encrypted_path.as_ref().file_name().unwrap();
+        decrypted.push(filename);
+        decrypted.set_extension("org");
+
+        decrypt(encrypted_path, &decrypted, &identities).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
+        })?;
+
+        Ok(decrypted)
+    }
+
+    pub fn export_single_entry(
+        &mut self,
+        kind: &EntryKind,
+        entry: &str,
+    ) -> Result<(), JournalError> {
+        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
         let filename = entry_filename(kind, entry);
         let journal_path = &self.entry_editor.journal_path;
 
@@ -205,18 +232,10 @@ impl EntryExporter {
         style_path.push(journal_path);
         style_path.push("style.css.org");
 
-        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
         let identities = load_identities(&self.entry_editor.identities)?;
-        let input_path = self.dir.path().join("input.org");
+        let input_path = self.decrypt_item(&self.dir.path(), &encrypted_file_path, &identities)?;
 
         let target_style_path = self.dir.path().join("style.css.org");
-
-        decrypt(encrypted_file_path, input_path.clone(), &identities).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
-        })?;
-
         symlink(&style_path, &target_style_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::FileWriteError,
@@ -224,9 +243,74 @@ impl EntryExporter {
             ])
         })?;
 
-        self.spawn_exporter(&[&input_path])?;
+        self.spawn_exporter(&input_path)?;
 
         self.exported_path = Some(input_path.with_extension("html"));
+
+        Ok(())
+    }
+
+    pub fn export_journal(&mut self, journal: &Journal) -> Result<(), JournalError> {
+        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        let identities = load_identities(&self.entry_editor.identities)?;
+
+        let mut index: Vec<String> = Vec::new();
+
+        index.push("#+SETUPFILE: style.css.org".to_string());
+        index.push("* Index".to_string());
+
+        let mut style_path = PathBuf::new();
+        style_path.push(&self.entry_editor.journal_path);
+        style_path.push("style.css.org");
+
+        for section in journal.sections() {
+            let kind_path = self.dir.path().join(String::from(&section.kind));
+            index.push(format!("** {}\n", String::from(&section.kind)));
+            std::fs::create_dir(&kind_path).unwrap();
+            fs::set_permissions(&kind_path, PermissionsExt::from_mode(0o700)).map_err(|_| {
+                JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile])
+            })?;
+
+            let target_style_path = kind_path.join("style.css.org");
+            symlink(&style_path, &target_style_path).map_err(|_| {
+                JournalError::chain(&[
+                    ErrorKind::FileWriteError,
+                    ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
+                ])
+            })?;
+
+            for entry_name in journal.section(&section.kind).iter_entries() {
+                let mut entry_path = PathBuf::from(&self.entry_editor.journal_path);
+                entry_path.push(entry_filename(&section.kind, entry_name));
+                let decrypted_path = self.decrypt_item(&kind_path, &entry_path, &identities)?;
+                let link = format!(
+                    "[[file:{}][~{}~]]",
+                    &decrypted_path.display(),
+                    &entry_name
+                );
+                index.push(link);
+
+                self.spawn_exporter(&decrypted_path)?;
+            }
+        }
+
+        let target_style_path = self.dir.path().join("style.css.org");
+        symlink(&style_path, &target_style_path).map_err(|_| {
+            JournalError::chain(&[
+                ErrorKind::FileWriteError,
+                ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
+            ])
+        })?;
+
+        let index_path = self.dir.path().join("index.org");
+
+        std::fs::write(&index_path, &index.join("\n\n")).unwrap();
+
+        self.spawn_exporter(&index_path)?;
+
+        self.exported_path = Some(index_path.with_extension("html"));
 
         Ok(())
     }
