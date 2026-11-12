@@ -62,8 +62,8 @@ impl Widget for &ProgressSpinner {
         buf.set_style(area, self.style);
 
         let block = Block::bordered().title(match self.complete {
-            true => " Exporting ... ",
-            false => " Export Complete ",
+            true => " Export Complete ",
+            false => " Exporting ... ",
         });
 
         let block = block.as_ref();
