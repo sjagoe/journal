@@ -257,9 +257,9 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    fn begin_export_entry(&mut self) -> Result<(), JournalError> {
+    fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter.start_export().map_err(|err| match err {
+            entry_exporter.export_single_entry(kind, entry).map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
             })?;
         }
@@ -344,9 +344,9 @@ impl<'a> App<'a> {
             Action::ExportEntry => {
                 if let Some(entry) = page.select(&self.journal) {
                     let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                    let entry_exporter = EntryExporter::new(&self.config, &entry_kind, &entry)?;
+                    let entry_exporter = EntryExporter::new(&self.config)?;
                     self.entry_exporter = Some(entry_exporter);
-                    self.begin_export_entry()?;
+                    self.begin_export_entry(&entry_kind, &entry)?;
                     self.mode = InputMode::ExportEntry(None);
                     return Ok(Redraw(false));
                 }

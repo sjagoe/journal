@@ -27,7 +27,6 @@ enum ExportProcess {
 }
 
 pub struct EntryExporter {
-    filename: String,
     progress: f64,
     entry_editor: EntryEditor,
     dir: TempDir,
@@ -35,6 +34,7 @@ pub struct EntryExporter {
     launch_started: Option<Instant>,
     export_command: String,
     export_command_args: Vec<String>,
+    exported_path: Option<PathBuf>,
 }
 
 fn get_export_command(
@@ -47,8 +47,7 @@ fn get_export_command(
 }
 
 impl EntryExporter {
-    pub fn new(config: &Config, kind: &EntryKind, entry: &str) -> Result<Self, JournalError> {
-        let filename = entry_filename(kind, entry);
+    pub fn new(config: &Config) -> Result<Self, JournalError> {
         let dir = tempfile::tempdir()
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         let entry_editor = EntryEditor::new(config)?;
@@ -57,7 +56,6 @@ impl EntryExporter {
             get_export_command(config.export.as_ref().map(|export| export.to_owned()))?;
 
         let exporter = Self {
-            filename,
             progress: 0.0,
             entry_editor,
             dir,
@@ -65,6 +63,7 @@ impl EntryExporter {
             launch_started: None,
             export_command,
             export_command_args,
+            exported_path: None,
         };
         Ok(exporter)
     }
@@ -161,11 +160,13 @@ impl EntryExporter {
         Ok(())
     }
 
-    fn spawn_exporter(&mut self, decrypted_path: &PathBuf) -> Result<(), JournalError> {
+    fn spawn_exporter<P: AsRef<std::ffi::OsStr>>(
+        &mut self,
+        decrypted_paths: &[P],
+    ) -> Result<(), JournalError> {
         let mut command = Command::new("emacs");
         command
-            .arg("-q")
-            .arg(decrypted_path)
+            .args(decrypted_paths)
             .args([
                 "--batch",
                 "-f",
@@ -197,12 +198,13 @@ impl EntryExporter {
         self.decrypted_path().with_extension("html")
     }
 
-    pub fn start_export(&mut self) -> Result<(), JournalError> {
+    pub fn export_single_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
+        let filename = entry_filename(kind, entry);
         let journal_path = &self.entry_editor.journal_path;
 
         let mut encrypted_file_path = PathBuf::new();
         encrypted_file_path.push(journal_path);
-        encrypted_file_path.push(&self.filename);
+        encrypted_file_path.push(&filename);
 
         let mut style_path = PathBuf::new();
         style_path.push(journal_path);
@@ -227,7 +229,9 @@ impl EntryExporter {
             ])
         })?;
 
-        self.spawn_exporter(&input_path)?;
+        self.spawn_exporter(&[&input_path])?;
+
+        self.exported_path = Some(input_path);
 
         Ok(())
     }
