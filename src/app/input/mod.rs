@@ -228,9 +228,9 @@ impl<'a> InputHandler<'a> {
             InputMode::ExportEntryComplete(maybe_input) => {
                 let input = input_chain(maybe_input);
                 return match self.key_map.action(&input) {
-                    KeyMapAction::Action(Action::NavigateBack | Action::ActivateSelectedEntry | Action::AppExit) => {
-                        Ok(Action::NextMode(InputMode::Ready(None)))
-                    },
+                    KeyMapAction::Action(
+                        Action::NavigateBack | Action::ActivateSelectedEntry | Action::AppExit,
+                    ) => Ok(Action::NextMode(InputMode::Ready(None))),
                     _ => Ok(Action::NoOp),
                 };
             }
