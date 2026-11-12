@@ -222,15 +222,6 @@ impl EntryExporter {
 
         self.spawn_exporter(&input_path)?;
 
-        // let exported_path =
-
-        // self.spawn_browser(&exported_path)?;
-
-        // // FIXME this is terrible.
-        // // We need to background this and wait for it to complete
-        // // The sleep for firefox to read the file before we delete it is also not great...
-        // std::thread::sleep(std::time::Duration::from_millis(500));
-
         Ok(())
     }
 }

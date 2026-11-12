@@ -179,22 +179,6 @@ impl<'a> App<'a> {
         }
     }
 
-    // pub fn draw_context_hint(&self, f: &mut Frame, area: Rect) {
-    //     let actions = [Event::BackOrExit, Event::Select, Event::New];
-
-    //     let keys_hint = actions
-    //         .iter()
-    //         .map(|a| ActionInfo::from(a).to_string())
-    //         .collect::<Vec<String>>()
-    //         .join(" | ");
-    //     let content = Span::styled(keys_hint, Style::default());
-    //     let block = Block::default()
-    //         .padding(Padding::horizontal(1))
-    //         .style(Style::default().fg(Color::Black).bg(Color::Gray));
-    //     let hint = Paragraph::new(Line::from(content)).block(block);
-    //     f.render_widget(hint, area);
-    // }
-
     fn edit_entry(
         &mut self,
         repo: &Repository,
