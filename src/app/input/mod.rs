@@ -180,7 +180,7 @@ impl<'a> InputHandler<'a> {
 
         match mode {
             InputMode::Ready(maybe_input) => {
-                let input = input_chain(&maybe_input);
+                let input = input_chain(maybe_input);
                 return Ok(self.handle_chained_input(&input));
             }
             InputMode::NewEntry(maybe_input) | InputMode::Commit(maybe_input) => {
@@ -226,13 +226,10 @@ impl<'a> InputHandler<'a> {
             }
             InputMode::ExportEntry(_) => {}
             InputMode::ExportEntryComplete(maybe_input) => {
-                let input = input_chain(&maybe_input);
+                let input = input_chain(maybe_input);
                 return match self.key_map.action(&input) {
-                    KeyMapAction::Action(action) => match action {
-                        Action::NavigateBack | Action::ActivateSelectedEntry | Action::AppExit => {
-                            Ok(Action::NextMode(InputMode::Ready(None)))
-                        }
-                        _ => Ok(Action::NoOp),
+                    KeyMapAction::Action(Action::NavigateBack | Action::ActivateSelectedEntry | Action::AppExit) => {
+                        Ok(Action::NextMode(InputMode::Ready(None)))
                     },
                     _ => Ok(Action::NoOp),
                 };

@@ -504,11 +504,8 @@ impl<'a> App<'a> {
             }
 
             Action::NextMode(mode) => {
-                match self.mode {
-                    InputMode::ExportEntryComplete(_) => {
-                        self.entry_exporter = None;
-                    }
-                    _ => {}
+                if let InputMode::ExportEntryComplete(_) = self.mode {
+                    self.entry_exporter = None;
                 }
                 self.mode = mode;
             }

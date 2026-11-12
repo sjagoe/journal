@@ -206,7 +206,7 @@ impl EntryExporter {
         decrypted.push(filename);
         decrypted.set_extension("org");
 
-        decrypt(encrypted_path, &decrypted, &identities).map_err(|err| match err {
+        decrypt(encrypted_path, &decrypted, identities).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
         })?;
 
@@ -233,7 +233,7 @@ impl EntryExporter {
         style_path.push("style.css.org");
 
         let identities = load_identities(&self.entry_editor.identities)?;
-        let input_path = self.decrypt_item(&self.dir.path(), &encrypted_file_path, &identities)?;
+        let input_path = self.decrypt_item(self.dir.path(), &encrypted_file_path, &identities)?;
 
         let target_style_path = self.dir.path().join("style.css.org");
         symlink(&style_path, &target_style_path).map_err(|_| {
@@ -287,8 +287,8 @@ impl EntryExporter {
                 let decrypted_path = self.decrypt_item(&kind_path, &entry_path, &identities)?;
                 let link = format!(
                     "[[file:{}][~{}~]]",
-                    &decrypted_path.display(),
-                    &entry_name
+                    decrypted_path.display(),
+                    entry_name
                 );
                 index.push(link);
 
@@ -306,7 +306,7 @@ impl EntryExporter {
 
         let index_path = self.dir.path().join("index.org");
 
-        std::fs::write(&index_path, &index.join("\n\n")).unwrap();
+        std::fs::write(&index_path, index.join("\n\n")).unwrap();
 
         self.spawn_exporter(&index_path)?;
 
