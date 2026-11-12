@@ -74,8 +74,11 @@ impl EntryExporter {
                 ExportProcess::Export(child) => {
                     if let Ok(Some(status)) = child.try_wait() {
                         if status.success() {
+                            let exported_path = self.exported_path.as_ref()
+                                .expect("Should have been set at start of export")
+                                .clone();
                             self.export_process = None;
-                            self.spawn_browser(&self.exported_path())?;
+                            self.spawn_browser(&exported_path)?;
                         } else {
                             let message = format!("Editor exited with code {:?}", status.code());
                             return Err(JournalError::chain(&[
@@ -190,14 +193,6 @@ impl EntryExporter {
         Ok(())
     }
 
-    fn decrypted_path(&self) -> PathBuf {
-        self.dir.path().join("input.org")
-    }
-
-    fn exported_path(&self) -> PathBuf {
-        self.decrypted_path().with_extension("html")
-    }
-
     pub fn export_single_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
         let journal_path = &self.entry_editor.journal_path;
@@ -214,7 +209,7 @@ impl EntryExporter {
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         let identities = load_identities(&self.entry_editor.identities)?;
-        let input_path = self.decrypted_path();
+        let input_path = self.dir.path().join("input.org");
 
         let target_style_path = self.dir.path().join("style.css.org");
 
@@ -231,7 +226,7 @@ impl EntryExporter {
 
         self.spawn_exporter(&[&input_path])?;
 
-        self.exported_path = Some(input_path);
+        self.exported_path = Some(input_path.with_extension("html"));
 
         Ok(())
     }
