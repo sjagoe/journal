@@ -44,3 +44,15 @@ jobs:
             --option extra-trusted-public-keys "${CACHIX_PUBLIC_KEY}"
           )
           nix build .#journal "${OPTIONS[@]}"
+
+  build-completed:
+    name: Build completed
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs: ["build"]
+    steps:
+      - name: Finalize overall build status status
+        env:
+          STATE: ${{ needs.build.result }}
+        run: |
+          [[ "$STATE" == "success" ]]
