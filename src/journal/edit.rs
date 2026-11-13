@@ -13,6 +13,7 @@ use digest_io::IoWrapper;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
+use tempfile::TempDir;
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
@@ -85,6 +86,7 @@ pub struct EntryEditor {
     pub(super) journal_path: String,
     editor: String,
     editor_args: Vec<String>,
+    dir: TempDir,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -120,6 +122,9 @@ impl PublicKeys {
 
 impl EntryEditor {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
         let (editor, editor_args) =
             get_editor_command(config.editor.as_ref().map(|editor| editor.to_owned()))?;
 
@@ -128,6 +133,7 @@ impl EntryEditor {
             editor,
             editor_args,
             journal_path: config.journal_path.to_owned(),
+            dir,
         };
         Ok(entry_editor)
     }
@@ -187,9 +193,8 @@ impl EntryEditor {
     }
 
     fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
+        let dir = &self.dir;
+        fs::set_permissions(dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         let identities = load_identities(&self.identities)?;
