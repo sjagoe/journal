@@ -85,7 +85,7 @@ impl DecryptedJournal {
             .map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
         encrypt(public_keys.keys, &mut input, &temporary_path)?;
 
-        copy_file(&temporary_path, &final_path)
+        std::fs::rename(&temporary_path, &final_path)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
@@ -100,7 +100,7 @@ impl DecryptedJournal {
         let mut input = BufReader::new(text.as_bytes());
         encrypt(public_keys.keys, &mut input, &temporary_path)?;
 
-        copy_file(&temporary_path, &final_path)
+        std::fs::rename(&temporary_path, &final_path)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
@@ -162,7 +162,7 @@ impl DecryptedJournal {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
         })?;
 
-        copy_file(&encrypted_path, &final_path)
+        std::fs::rename(&encrypted_path, &final_path)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
