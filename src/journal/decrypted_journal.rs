@@ -17,7 +17,6 @@ use crate::{
 use super::{
     Journal,
     age::{decrypt, encrypt, load_identities},
-    entry_filename,
 };
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -54,6 +53,7 @@ impl PublicKeys {
 pub struct DecryptedJournal {
     pub(super) dir: TempDir,
     journal_path: String,
+    identities: Vec<String>,
 }
 
 impl DecryptedJournal {
@@ -63,11 +63,13 @@ impl DecryptedJournal {
         fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
-        decrypt_journal(&dir, &config.get_identities(), journal)?;
+        let identities = config.get_identities().clone();
+        decrypt_journal(&dir, &identities, journal)?;
 
         Ok(DecryptedJournal {
             dir,
             journal_path: journal.path.clone(),
+            identities,
         })
     }
 
@@ -102,6 +104,11 @@ impl DecryptedJournal {
 
         std::fs::rename(&temporary_path, &final_path)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        let decrypt_path = decrypted_file_path(self.dir.path(), filename);
+
+        let identities = load_identities(&self.identities)?;
+        decrypt_item(&final_path, &decrypt_path, &identities)?;
 
         Ok(())
     }
@@ -179,24 +186,20 @@ fn copy_file<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::
 }
 
 fn decrypted_file_path<D: AsRef<Path>, F: AsRef<OsStr>>(dir: D, filename: F) -> PathBuf {
-    let mut decrypted = PathBuf::from(dir.as_ref());
-    decrypted.push(filename.as_ref());
-    decrypted.set_extension("org");
-    decrypted
+    let decrypted = PathBuf::from(dir.as_ref());
+    decrypted.join(filename.as_ref()).with_extension("org")
 }
 
-fn decrypt_item<D: AsRef<Path>, E: AsRef<Path>>(
-    dir: D,
+fn decrypt_item<E: AsRef<Path>, D: AsRef<Path>>(
     encrypted_path: E,
+    decrypted_path: D,
     identities: &Vec<Box<dyn age::Identity>>,
-) -> Result<PathBuf, JournalError> {
-    let decrypted = decrypted_file_path(dir, encrypted_path.as_ref().file_name().unwrap());
-
-    decrypt(encrypted_path, &decrypted, identities).map_err(|err| match err {
+) -> Result<(), JournalError> {
+    decrypt(encrypted_path, decrypted_path, identities).map_err(|err| match err {
         JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
     })?;
 
-    Ok(decrypted)
+    Ok(())
 }
 
 fn copy_style<D: AsRef<Path>>(journal_path: &str, dir: D) -> Result<(), JournalError> {
@@ -228,10 +231,12 @@ fn decrypt_journal<D: AsRef<Path>>(
 
         copy_style(&journal.path, &kind_path)?;
 
-        for entry_name in journal.section(&section.kind).iter_entries() {
+        for filename in journal.section(&section.kind).iter_files() {
             let mut entry_path = PathBuf::from(&journal.path);
-            entry_path.push(entry_filename(&section.kind, entry_name));
-            let decrypted_path = decrypt_item(&kind_path, &entry_path, &identities)?;
+            entry_path.push(&filename);
+            let decrypted_path = decrypted_file_path(&dir, &filename);
+
+            decrypt_item(&entry_path, &decrypted_path, &identities)?;
 
             fs::set_permissions(&decrypted_path, PermissionsExt::from_mode(0o400)).map_err(
                 |_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]),
