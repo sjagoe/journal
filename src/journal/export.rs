@@ -7,7 +7,6 @@ use std::{
 };
 
 use color_eyre::Result;
-use tempfile::TempDir;
 
 use crate::{
     config::Config,
@@ -29,7 +28,6 @@ enum ExportProcess {
 pub struct EntryExporter {
     progress: f64,
     entry_editor: EntryEditor,
-    dir: TempDir,
     export_process: Option<ExportProcess>,
     launch_started: Option<Instant>,
     export_command: String,
@@ -48,8 +46,6 @@ fn get_export_command(
 
 impl EntryExporter {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         let entry_editor = EntryEditor::new(config)?;
 
         let (export_command, export_command_args) =
@@ -58,7 +54,6 @@ impl EntryExporter {
         let exporter = Self {
             progress: 0.0,
             entry_editor,
-            dir,
             export_process: None,
             launch_started: None,
             export_command,
@@ -180,7 +175,7 @@ impl EntryExporter {
                 "org-html-export-to-html",
                 "--kill",
             ])
-            .current_dir(self.dir.path())
+            .current_dir(self.entry_editor.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
         if let Ok(child) = command.spawn() {
@@ -218,9 +213,6 @@ impl EntryExporter {
         kind: &EntryKind,
         entry: &str,
     ) -> Result<(), JournalError> {
-        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
         let filename = entry_filename(kind, entry);
         let journal_path = &self.entry_editor.journal_path;
 
@@ -233,9 +225,13 @@ impl EntryExporter {
         style_path.push("style.css.org");
 
         let identities = load_identities(&self.entry_editor.identities)?;
-        let input_path = self.decrypt_item(self.dir.path(), &encrypted_file_path, &identities)?;
+        let input_path = self.decrypt_item(
+            self.entry_editor.dir.path(),
+            &encrypted_file_path,
+            &identities,
+        )?;
 
-        let target_style_path = self.dir.path().join("style.css.org");
+        let target_style_path = self.entry_editor.dir.path().join("style.css.org");
         symlink(&style_path, &target_style_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::FileWriteError,
@@ -251,9 +247,6 @@ impl EntryExporter {
     }
 
     pub fn export_journal(&mut self, journal: &Journal) -> Result<(), JournalError> {
-        fs::set_permissions(&self.dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
         let identities = load_identities(&self.entry_editor.identities)?;
 
         let mut index: Vec<String> = Vec::new();
@@ -266,7 +259,11 @@ impl EntryExporter {
         style_path.push("style.css.org");
 
         for section in journal.sections() {
-            let kind_path = self.dir.path().join(String::from(&section.kind));
+            let kind_path = self
+                .entry_editor
+                .dir
+                .path()
+                .join(String::from(&section.kind));
             index.push(format!("** {}\n", String::from(&section.kind)));
             std::fs::create_dir(&kind_path).unwrap();
             fs::set_permissions(&kind_path, PermissionsExt::from_mode(0o700)).map_err(|_| {
@@ -292,7 +289,7 @@ impl EntryExporter {
             }
         }
 
-        let target_style_path = self.dir.path().join("style.css.org");
+        let target_style_path = self.entry_editor.dir.path().join("style.css.org");
         symlink(&style_path, &target_style_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::FileWriteError,
@@ -300,7 +297,7 @@ impl EntryExporter {
             ])
         })?;
 
-        let index_path = self.dir.path().join("index.org");
+        let index_path = self.entry_editor.dir.path().join("index.org");
 
         std::fs::write(&index_path, index.join("\n\n")).unwrap();
 

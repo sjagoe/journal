@@ -86,7 +86,7 @@ pub struct EntryEditor {
     pub(super) journal_path: String,
     editor: String,
     editor_args: Vec<String>,
-    dir: TempDir,
+    pub(super) dir: TempDir,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -123,6 +123,8 @@ impl PublicKeys {
 impl EntryEditor {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
         let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         let (editor, editor_args) =
@@ -194,8 +196,6 @@ impl EntryEditor {
 
     fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
         let dir = &self.dir;
-        fs::set_permissions(dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
 
         let identities = load_identities(&self.identities)?;
         let input_path = dir.path().join("input.org");
