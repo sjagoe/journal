@@ -1,5 +1,4 @@
 use std::{
-    os::unix::fs::symlink,
     path::PathBuf,
     process::{Child, Command},
     time::{Duration, Instant},
@@ -26,7 +25,6 @@ enum ExportProcess {
 pub struct EntryExporter {
     progress: f64,
     journal: DecryptedJournal,
-    encrypted_path: String,
     export_process: Option<ExportProcess>,
     launch_started: Option<Instant>,
     export_command: String,
@@ -53,7 +51,6 @@ impl EntryExporter {
         let exporter = Self {
             progress: 0.0,
             journal: decrypted,
-            encrypted_path: journal.path.clone(),
             export_process: None,
             launch_started: None,
             export_command,
@@ -197,19 +194,7 @@ impl EntryExporter {
     ) -> Result<(), JournalError> {
         let filename = entry_filename(kind, entry);
 
-        let mut style_path = PathBuf::new();
-        style_path.push(&self.encrypted_path);
-        style_path.push("style.css.org");
-
         let input_path = self.journal.item_path(&filename);
-
-        let target_style_path = self.journal.dir.path().join("style.css.org");
-        symlink(&style_path, &target_style_path).map_err(|_| {
-            JournalError::chain(&[
-                ErrorKind::FileWriteError,
-                ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
-            ])
-        })?;
 
         self.spawn_exporter(&input_path)?;
 
@@ -224,21 +209,8 @@ impl EntryExporter {
         index.push("#+SETUPFILE: style.css.org".to_string());
         index.push("* Index".to_string());
 
-        let mut style_path = PathBuf::new();
-        style_path.push(&self.encrypted_path);
-        style_path.push("style.css.org");
-
         for section in journal.sections() {
-            let kind_path = self.journal.dir.path().join(String::from(&section.kind));
             index.push(format!("** {}\n", String::from(&section.kind)));
-
-            let target_style_path = kind_path.join("style.css.org");
-            symlink(&style_path, &target_style_path).map_err(|_| {
-                JournalError::chain(&[
-                    ErrorKind::FileWriteError,
-                    ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
-                ])
-            })?;
 
             for entry_name in journal.section(&section.kind).iter_entries() {
                 let filename = entry_filename(&section.kind, entry_name);
@@ -250,14 +222,6 @@ impl EntryExporter {
                 self.spawn_exporter(&decrypted_path)?;
             }
         }
-
-        let target_style_path = self.journal.dir.path().join("style.css.org");
-        symlink(&style_path, &target_style_path).map_err(|_| {
-            JournalError::chain(&[
-                ErrorKind::FileWriteError,
-                ErrorKind::Wrapped("Failed to symlink stylesheel".to_string()),
-            ])
-        })?;
 
         let index_path = self.journal.dir.path().join("index.org");
 

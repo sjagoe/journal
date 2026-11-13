@@ -157,18 +157,18 @@ impl DecryptedJournal {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
         })?;
 
-        copy_new_file(&encrypted_path, &final_path)
+        copy_file(&encrypted_path, &final_path)
             .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
     }
 }
 
-fn copy_new_file(new_path: &PathBuf, encrypted_file_path: &PathBuf) -> Result<(), std::io::Error> {
-    let mut new_file = BufReader::new(fs::File::open(new_path)?);
-    let mut stored_file = BufWriter::new(fs::File::create(encrypted_file_path)?);
+fn copy_file<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::io::Error> {
+    let mut from_buf = BufReader::new(fs::File::open(from)?);
+    let mut to_buf = BufWriter::new(fs::File::create(to)?);
 
-    let _ = std::io::copy(&mut new_file, &mut stored_file)?;
+    let _ = std::io::copy(&mut from_buf, &mut to_buf)?;
 
     Ok(())
 }
@@ -194,6 +194,17 @@ fn decrypt_item<D: AsRef<Path>, E: AsRef<Path>>(
     Ok(decrypted)
 }
 
+fn copy_style<D: AsRef<Path>>(journal_path: &str, dir: D) -> Result<(), JournalError> {
+    let style_name = "style.css.org";
+    let mut style_path = PathBuf::from(&journal_path);
+    style_path.push(style_name);
+
+    copy_file(&style_path, dir.as_ref().join(style_name))
+        .map_err(|err| JournalError::Error(ErrorKind::Wrapped(err.to_string())))?;
+
+    Ok(())
+}
+
 fn decrypt_journal<D: AsRef<Path>>(
     dir: D,
     identities: &[String],
@@ -201,12 +212,16 @@ fn decrypt_journal<D: AsRef<Path>>(
 ) -> Result<(), JournalError> {
     let identities = load_identities(identities)?;
 
+    copy_style(&journal.path, &dir)?;
+
     for section in journal.sections() {
         let kind_path = dir.as_ref().join(String::from(&section.kind));
 
         std::fs::create_dir(&kind_path).unwrap();
         fs::set_permissions(&kind_path, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        copy_style(&journal.path, &kind_path)?;
 
         for entry_name in journal.section(&section.kind).iter_entries() {
             let mut entry_path = PathBuf::from(&journal.path);
