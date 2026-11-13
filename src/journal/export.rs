@@ -282,6 +282,11 @@ impl EntryExporter {
                 let mut entry_path = PathBuf::from(&self.entry_editor.journal_path);
                 entry_path.push(entry_filename(&section.kind, entry_name));
                 let decrypted_path = self.decrypt_item(&kind_path, &entry_path, &identities)?;
+
+                fs::set_permissions(&decrypted_path, PermissionsExt::from_mode(0o400)).map_err(|_| {
+                    JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile])
+                })?;
+
                 let link = format!("[[file:{}][~{}~]]", decrypted_path.display(), entry_name);
                 index.push(link);
 
