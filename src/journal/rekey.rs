@@ -13,28 +13,19 @@ use crate::{
 };
 
 use super::{
-    Journal,
-    age::{decrypt, encrypt, load_identities},
-    edit::PublicKeys,
+    Journal, age::{decrypt, encrypt, load_identities}, decrypted_journal::DecryptedJournal, edit::PublicKeys,
 };
 
 pub struct EntryReKey {
     identities: Vec<String>,
     journal_path: String,
-    dir: TempDir,
 }
 
 impl EntryReKey {
     pub fn new(config: &Config) -> Result<Self, JournalError> {
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
         Ok(Self {
             identities: config.get_identities(),
             journal_path: config.journal_path.to_owned(),
-            dir,
         })
     }
 
@@ -101,15 +92,16 @@ impl EntryReKey {
 
     pub fn re_key_repository(
         &mut self,
+        config: &Config,
         journal: &Journal,
         new_key_path: &Path,
     ) -> Result<(), JournalError> {
-        for item in journal.iter_files() {
-            let mut encrypted_path = PathBuf::new();
-            encrypted_path.push(&self.journal_path);
-            encrypted_path.push(&item);
-            self.re_key_file(&encrypted_path, new_key_path)?;
+        let decrypted = DecryptedJournal::new(config, journal)?;
+
+        for filename in journal.iter_files() {
+            decrypted.re_key_file(&filename, new_key_path)?;
         }
+
         Ok(())
     }
 }

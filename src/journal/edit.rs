@@ -18,13 +18,10 @@ use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 use crate::{
-    config::Config,
-    errors::{ErrorKind, JournalError},
-    journal::{EntryKind, age::decrypt, entry_filename},
-    tui,
+    config::Config, errors::{ErrorKind, JournalError}, journal::{EntryKind, age::decrypt, decrypted_journal, entry_filename}, tui,
 };
 
-use super::age::{encrypt, load_identities};
+use super::{Journal, age::load_identities, decrypted_journal::DecryptedJournal};
 
 static ORG_DATE_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]-[day] [weekday repr:short]");
@@ -82,84 +79,23 @@ fn get_editor_command(
 }
 
 pub struct EntryEditor {
-    pub(super) identities: Vec<String>,
-    pub(super) journal_path: String,
     editor: String,
     editor_args: Vec<String>,
-    pub(super) dir: TempDir,
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct PublicKeys {
-    pub keys: Vec<String>,
-}
-
-impl PublicKeys {
-    pub fn new(journal_path: &str) -> Result<Self, JournalError> {
-        let mut keys_path = PathBuf::new();
-        keys_path.push(journal_path);
-        keys_path.push("metadata.json");
-
-        let file = File::open(keys_path).map_err(|e| {
-            JournalError::chain(&[
-                ErrorKind::Encryption,
-                ErrorKind::FileReadError,
-                ErrorKind::Wrapped(e.to_string()),
-            ])
-        })?;
-        let reader = BufReader::new(file);
-        let public_keys: Self = serde_json::from_reader(reader).map_err(|e| {
-            JournalError::chain(&[
-                ErrorKind::Encryption,
-                ErrorKind::FileReadError,
-                ErrorKind::Wrapped(e.to_string()),
-            ])
-        })?;
-
-        Ok(public_keys)
-    }
+    journal: DecryptedJournal,
 }
 
 impl EntryEditor {
-    pub fn new(config: &Config) -> Result<Self, JournalError> {
-        let dir = tempfile::tempdir()
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
-            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
+    pub fn new(config: &Config, journal: &Journal) -> Result<Self, JournalError> {
         let (editor, editor_args) =
             get_editor_command(config.editor.as_ref().map(|editor| editor.to_owned()))?;
 
+        let decrypted = DecryptedJournal::new(config, journal)?;
         let entry_editor = EntryEditor {
-            identities: config.get_identities(),
             editor,
             editor_args,
-            journal_path: config.journal_path.to_owned(),
-            dir,
+            journal: decrypted,
         };
         Ok(entry_editor)
-    }
-
-    fn encrypt<P: AsRef<Path>>(
-        &self,
-        encrypted_path: P,
-        decrypted_path: Option<P>,
-        text: Option<&str>,
-    ) -> Result<(), JournalError> {
-        let public_keys = PublicKeys::new(&self.journal_path)?;
-
-        if let Some(path) = decrypted_path {
-            let mut input =
-                File::open(path).map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
-            encrypt(public_keys.keys, &mut input, encrypted_path)?;
-        } else if let Some(text) = text {
-            let mut input = BufReader::new(text.as_bytes());
-            encrypt(public_keys.keys, &mut input, encrypted_path)?;
-        } else {
-            panic!("encrypt() MUST have exactly one of decrypted_path or text passed")
-        };
-
-        Ok(())
     }
 
     fn spawn_editor<P: AsRef<OsStr>>(&self, decrypted_path: P) -> Result<(), JournalError> {
@@ -194,29 +130,20 @@ impl EntryEditor {
         Ok(())
     }
 
-    fn decrypt_and_edit_entry(&self, encrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
-        let dir = &self.dir;
-
-        let identities = load_identities(&self.identities)?;
-        let input_path = dir.path().join("input.org");
-
-        decrypt(encrypted_file_path, input_path.clone(), &identities).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
-        })?;
-
-        let pre_edit_hash = sha256(&input_path).map_err(|_| {
+    fn edit_entry(&self, filename: &str, decrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
+        let pre_edit_hash = sha256(&decrypted_file_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::EditingEntry,
                 ErrorKind::Wrapped("Failed to hash original content".to_string()),
             ])
         })?;
 
-        self.spawn_editor(&input_path).map_err(|err| match err {
+        self.spawn_editor(&decrypted_file_path).map_err(|err| match err {
             JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
         })?;
 
         // fixme: We don't want to discard changes in this case!
-        let post_edit_hash = sha256(&input_path).map_err(|_| {
+        let post_edit_hash = sha256(&decrypted_file_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::EditingEntry,
                 ErrorKind::Wrapped("Failed to hash new content".to_string()),
@@ -227,7 +154,7 @@ impl EntryEditor {
             return Ok(false);
         }
 
-        self.encrypt(encrypted_file_path, Some(&input_path), None)
+        self.journal.encrypt_path(filename, &decrypted_file_path)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::Encryption, e]),
             })?;
@@ -235,28 +162,7 @@ impl EntryEditor {
         Ok(true)
     }
 
-    fn create_new_entry(&self, encrypted_file_path: &PathBuf) -> Result<(), JournalError> {
-        let mut directory_path = encrypted_file_path.to_owned();
-        directory_path.pop();
-
-        if let Some(err) = metadata(&directory_path).err()
-            && err.kind() == NotFound
-        {
-            fs::create_dir(&directory_path).map_err(|err| {
-                JournalError::chain(&[
-                    ErrorKind::FileWriteError,
-                    ErrorKind::Wrapped(err.to_string()),
-                ])
-            })?;
-        }
-
-        let _ = File::create_new(encrypted_file_path).map_err(|err| {
-            JournalError::chain(&[
-                ErrorKind::FileWriteError,
-                ErrorKind::Wrapped(err.to_string()),
-            ])
-        })?;
-
+    fn create_new_entry(&self, filename: &str) -> Result<(), JournalError> {
         let now = OffsetDateTime::now_local()
             .map_err(|_| JournalError::chain(&[ErrorKind::NewEntry, ErrorKind::GetCurrentTime]))?;
 
@@ -272,7 +178,7 @@ impl EntryEditor {
             now_org_str
         );
 
-        self.encrypt(encrypted_file_path, None, Some(&text))
+        self.journal.encrypt_text(filename, &text)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::Encryption, e]),
             })?;
@@ -281,13 +187,7 @@ impl EntryEditor {
     }
 
     fn create_or_edit_entry(&self, filename: &str) -> Result<bool, JournalError> {
-        let mut encrypted_file_path = PathBuf::new();
-        encrypted_file_path.push(&self.journal_path);
-        encrypted_file_path.push(filename);
-
-        if !encrypted_file_path.exists() {
-            return Err(JournalError::Error(ErrorKind::FileMissingError));
-        }
+        let decrypted_path = self.journal.edit_item(filename)?;
 
         let display_editor = if self.editor_args.is_empty() {
             self.editor.to_string()
@@ -297,7 +197,7 @@ impl EntryEditor {
 
         eprintln!("Opening {} with {}", filename, display_editor);
 
-        let edited = self.decrypt_and_edit_entry(&encrypted_file_path)?;
+        let edited = self.edit_entry(filename, &decrypted_path)?;
         if !edited {
             println!("{} wasn't changed, skipping re-encryption.", filename);
         }
@@ -325,12 +225,8 @@ impl EntryEditor {
     pub fn create_entry(&self, kind: &EntryKind, entry: &str) -> Result<bool, JournalError> {
         let filename = entry_filename(kind, entry);
 
-        let mut encrypted_file_path = PathBuf::new();
-        encrypted_file_path.push(&self.journal_path);
-        encrypted_file_path.push(filename);
-
-        if !encrypted_file_path.exists() {
-            self.create_new_entry(&encrypted_file_path)?;
+        if !self.journal.encrypted_exists(&filename) {
+            self.create_new_entry(&filename)?;
             Ok(true)
         } else {
             Ok(false)

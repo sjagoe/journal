@@ -1,0 +1,219 @@
+use std::{
+    ffi::OsStr, fs::{self, File}, io::{BufReader, BufWriter}, os::unix::fs::PermissionsExt, path::{Path, PathBuf},
+};
+
+use serde::Deserialize;
+use tempfile::TempDir;
+
+use crate::{
+    config::Config,
+    errors::{ErrorKind, JournalError},
+};
+
+use super::{
+    Journal,
+    age::{decrypt, encrypt, load_identities},
+    entry_filename,
+};
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PublicKeys {
+    pub keys: Vec<String>,
+}
+
+impl PublicKeys {
+    pub fn new(journal_path: &str) -> Result<Self, JournalError> {
+        let mut keys_path = PathBuf::new();
+        keys_path.push(journal_path);
+        keys_path.push("metadata.json");
+
+        let file = File::open(keys_path).map_err(|e| {
+            JournalError::chain(&[
+                ErrorKind::Encryption,
+                ErrorKind::FileReadError,
+                ErrorKind::Wrapped(e.to_string()),
+            ])
+        })?;
+        let reader = BufReader::new(file);
+        let public_keys: Self = serde_json::from_reader(reader).map_err(|e| {
+            JournalError::chain(&[
+                ErrorKind::Encryption,
+                ErrorKind::FileReadError,
+                ErrorKind::Wrapped(e.to_string()),
+            ])
+        })?;
+
+        Ok(public_keys)
+    }
+}
+
+pub struct DecryptedJournal {
+    pub(super) dir: TempDir,
+    journal_path: String,
+}
+
+impl DecryptedJournal {
+    pub fn new(config: &Config, journal: &Journal) -> Result<Self, JournalError> {
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        decrypt_journal(&dir, &config.get_identities(), journal)?;
+
+        Ok(DecryptedJournal {
+            dir,
+            journal_path: journal.path.clone(),
+        })
+    }
+
+    pub(super) fn encrypt_path<D: AsRef<Path>>(
+        &self,
+        filename: &str,
+        decrypted_path: D,
+    ) -> Result<(), JournalError> {
+        let mut encrypted_path = PathBuf::from(&self.journal_path);
+        encrypted_path.push(filename);
+
+        let public_keys = PublicKeys::new(&self.journal_path)?;
+
+        let mut input = File::open(decrypted_path)
+            .map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
+        encrypt(public_keys.keys, &mut input, &encrypted_path)?;
+
+        Ok(())
+    }
+
+    pub(super) fn encrypt_text(&self, filename: &str, text: &str) -> Result<(), JournalError> {
+        let mut encrypted_path = PathBuf::from(&self.journal_path);
+        encrypted_path.push(filename);
+
+        let public_keys = PublicKeys::new(&self.journal_path)?;
+
+        let mut input = BufReader::new(text.as_bytes());
+        encrypt(public_keys.keys, &mut input, encrypted_path)?;
+
+        Ok(())
+    }
+
+    pub(super) fn item_path(&self, filename: &str) -> PathBuf {
+        decrypted_file_path(&self.dir.path(), filename)
+    }
+
+    pub(super) fn edit_item(&self, filename: &str) -> Result<PathBuf, JournalError> {
+        let item_path = self.item_path(filename);
+
+        if !item_path.exists() {
+            return Err(JournalError::Error(ErrorKind::FileMissingError));
+        }
+
+        fs::set_permissions(&item_path, PermissionsExt::from_mode(0o600))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        Ok(item_path)
+    }
+
+    pub(super) fn encrypted_exists(&self, filename: &str) -> bool {
+        let mut encrypted_file_path = PathBuf::from(&self.journal_path);
+        encrypted_file_path.push(filename);
+
+        encrypted_file_path.exists()
+    }
+
+    pub fn re_key_file<P: AsRef<OsStr>>(
+        &self,
+        filename: &str,
+        new_key: P,
+    ) -> Result<(), JournalError> {
+        let dir = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        fs::set_permissions(&dir, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        println!("Re-keying {:?}", filename);
+
+        let item_path = self.item_path(filename);
+
+        let mut encrypted_path = PathBuf::from(&self.journal_path);
+        encrypted_path.push(filename);
+        let final_path = encrypted_path.clone();
+        encrypted_path.add_extension("rekey");
+
+        let public_keys = PublicKeys::new(&self.journal_path)?;
+
+        let mut input =
+            File::open(&item_path).map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
+        encrypt(public_keys.keys, &mut input, &encrypted_path)?;
+
+        // FIXME
+        let new_keys: Vec<String> = vec![new_key.as_ref().to_string_lossy().to_string()];
+        // We test with only the new identity to ensure the rekey has worked
+        let new_identities = load_identities(&new_keys)?;
+        decrypt(&encrypted_path, &item_path, &new_identities).map_err(|err| match err {
+            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
+        })?;
+
+        copy_new_file(&encrypted_path, &final_path)
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
+
+        Ok(())
+    }
+}
+
+fn copy_new_file(new_path: &PathBuf, encrypted_file_path: &PathBuf) -> Result<(), std::io::Error> {
+    let mut new_file = BufReader::new(fs::File::open(new_path)?);
+    let mut stored_file = BufWriter::new(fs::File::create(encrypted_file_path)?);
+
+    let _ = std::io::copy(&mut new_file, &mut stored_file)?;
+
+    Ok(())
+}
+
+fn decrypted_file_path<D: AsRef<Path>, F: AsRef<OsStr>>(dir: D, filename: F) -> PathBuf {
+    let mut decrypted = PathBuf::from(dir.as_ref());
+    decrypted.push(filename.as_ref());
+    decrypted.set_extension("org");
+    decrypted
+}
+
+fn decrypt_item<D: AsRef<Path>, E: AsRef<Path>>(
+    dir: D,
+    encrypted_path: E,
+    identities: &Vec<Box<dyn age::Identity>>,
+) -> Result<PathBuf, JournalError> {
+    let decrypted = decrypted_file_path(dir, encrypted_path.as_ref().file_name().unwrap());
+
+    decrypt(encrypted_path, &decrypted, identities).map_err(|err| match err {
+        JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
+    })?;
+
+    Ok(decrypted)
+}
+
+fn decrypt_journal<D: AsRef<Path>>(
+    dir: D,
+    identities: &[String],
+    journal: &Journal,
+) -> Result<(), JournalError> {
+    let identities = load_identities(identities)?;
+
+    for section in journal.sections() {
+        let kind_path = dir.as_ref().join(String::from(&section.kind));
+
+        std::fs::create_dir(&kind_path).unwrap();
+        fs::set_permissions(&kind_path, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
+        for entry_name in journal.section(&section.kind).iter_entries() {
+            let mut entry_path = PathBuf::from(&journal.path);
+            entry_path.push(entry_filename(&section.kind, entry_name));
+            let decrypted_path = decrypt_item(&kind_path, &entry_path, &identities)?;
+
+            fs::set_permissions(&decrypted_path, PermissionsExt::from_mode(0o400)).map_err(
+                |_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]),
+            )?;
+        }
+    }
+
+    Ok(())
+}
