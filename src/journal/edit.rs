@@ -1,27 +1,27 @@
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File, metadata},
-    io::{self, BufReader, ErrorKind::NotFound},
-    os::unix::fs::PermissionsExt,
+    fs::File,
+    io::{self},
     path::{Path, PathBuf},
     process::Command,
 };
 
 use color_eyre::Result;
 use digest_io::IoWrapper;
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use shell_words::{join, split};
-use tempfile::TempDir;
 use time::macros::format_description;
 use time::{OffsetDateTime, format_description::StaticFormatDescription};
 
 use crate::{
-    config::Config, errors::{ErrorKind, JournalError}, journal::{EntryKind, age::decrypt, decrypted_journal, entry_filename}, tui,
+    config::Config,
+    errors::{ErrorKind, JournalError},
+    journal::{EntryKind, entry_filename},
+    tui,
 };
 
-use super::{Journal, age::load_identities, decrypted_journal::DecryptedJournal};
+use super::{Journal, decrypted_journal::DecryptedJournal};
 
 static ORG_DATE_FORMAT: StaticFormatDescription =
     format_description!("[year]-[month]-[day] [weekday repr:short]");
@@ -130,20 +130,25 @@ impl EntryEditor {
         Ok(())
     }
 
-    fn edit_entry(&self, filename: &str, decrypted_file_path: &PathBuf) -> Result<bool, JournalError> {
-        let pre_edit_hash = sha256(&decrypted_file_path).map_err(|_| {
+    fn edit_entry(
+        &self,
+        filename: &str,
+        decrypted_file_path: &PathBuf,
+    ) -> Result<bool, JournalError> {
+        let pre_edit_hash = sha256(decrypted_file_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::EditingEntry,
                 ErrorKind::Wrapped("Failed to hash original content".to_string()),
             ])
         })?;
 
-        self.spawn_editor(&decrypted_file_path).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
-        })?;
+        self.spawn_editor(decrypted_file_path)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::EditingEntry, e]),
+            })?;
 
         // fixme: We don't want to discard changes in this case!
-        let post_edit_hash = sha256(&decrypted_file_path).map_err(|_| {
+        let post_edit_hash = sha256(decrypted_file_path).map_err(|_| {
             JournalError::chain(&[
                 ErrorKind::EditingEntry,
                 ErrorKind::Wrapped("Failed to hash new content".to_string()),
@@ -154,7 +159,8 @@ impl EntryEditor {
             return Ok(false);
         }
 
-        self.journal.encrypt_path(filename, &decrypted_file_path)
+        self.journal
+            .encrypt_path(filename, decrypted_file_path)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::Encryption, e]),
             })?;
@@ -178,7 +184,8 @@ impl EntryEditor {
             now_org_str
         );
 
-        self.journal.encrypt_text(filename, &text)
+        self.journal
+            .encrypt_text(filename, &text)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::Encryption, e]),
             })?;

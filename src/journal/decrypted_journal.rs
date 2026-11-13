@@ -1,5 +1,9 @@
 use std::{
-    ffi::OsStr, fs::{self, File}, io::{BufReader, BufWriter}, os::unix::fs::PermissionsExt, path::{Path, PathBuf},
+    ffi::OsStr,
+    fs::{self, File},
+    io::{BufReader, BufWriter},
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
 };
 
 use serde::Deserialize;
@@ -97,7 +101,7 @@ impl DecryptedJournal {
     }
 
     pub(super) fn item_path(&self, filename: &str) -> PathBuf {
-        decrypted_file_path(&self.dir.path(), filename)
+        decrypted_file_path(self.dir.path(), filename)
     }
 
     pub(super) fn edit_item(&self, filename: &str) -> Result<PathBuf, JournalError> {

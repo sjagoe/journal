@@ -26,9 +26,15 @@ use crate::{
         actions::Action,
         entries_page::{ActivePane, EntriesPage},
         progress_spinner::ProgressSpinner,
-    }, config::Config, errors::{ErrorKind, JournalError}, journal::{
-        EntryKind, Journal, decrypted_journal::DecryptedJournal, edit::EntryEditor, export::EntryExporter, git,
-    }, traits::{Drawable, Navigable}, ui::centered_rect,
+    },
+    config::Config,
+    errors::{ErrorKind, JournalError},
+    journal::{
+        EntryKind, Journal, decrypted_journal::DecryptedJournal, edit::EntryEditor,
+        export::EntryExporter, git,
+    },
+    traits::{Drawable, Navigable},
+    ui::centered_rect,
 };
 
 pub struct Redraw(pub bool);

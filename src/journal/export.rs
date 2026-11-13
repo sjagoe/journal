@@ -1,7 +1,6 @@
 use std::{
-    fs,
-    os::unix::fs::{PermissionsExt, symlink},
-    path::{Path, PathBuf},
+    os::unix::fs::symlink,
+    path::PathBuf,
     process::{Child, Command},
     time::{Duration, Instant},
 };
@@ -13,10 +12,9 @@ use crate::{
     errors::{ErrorKind, JournalError},
 };
 
-use super::{EntryKind, Journal, decrypted_journal::DecryptedJournal, edit::program_from_string, entry_filename};
 use super::{
-    age::{decrypt, load_identities},
-    edit::EntryEditor,
+    EntryKind, Journal, decrypted_journal::DecryptedJournal, edit::program_from_string,
+    entry_filename,
 };
 
 #[derive(Debug)]
@@ -192,24 +190,6 @@ impl EntryExporter {
         Ok(())
     }
 
-    fn decrypt_item<D: AsRef<Path>, E: AsRef<Path>>(
-        &self,
-        dir: D,
-        encrypted_path: E,
-        identities: &Vec<Box<dyn age::Identity>>,
-    ) -> Result<PathBuf, JournalError> {
-        let mut decrypted = PathBuf::from(dir.as_ref());
-        let filename = encrypted_path.as_ref().file_name().unwrap();
-        decrypted.push(filename);
-        decrypted.set_extension("org");
-
-        decrypt(encrypted_path, &decrypted, identities).map_err(|err| match err {
-            JournalError::Error(e) => JournalError::chain(&[ErrorKind::Decryption, e]),
-        })?;
-
-        Ok(decrypted)
-    }
-
     pub fn export_single_entry(
         &mut self,
         kind: &EntryKind,
@@ -249,11 +229,7 @@ impl EntryExporter {
         style_path.push("style.css.org");
 
         for section in journal.sections() {
-            let kind_path = self
-                .journal
-                .dir
-                .path()
-                .join(String::from(&section.kind));
+            let kind_path = self.journal.dir.path().join(String::from(&section.kind));
             index.push(format!("** {}\n", String::from(&section.kind)));
 
             let target_style_path = kind_path.join("style.css.org");
