@@ -8,10 +8,10 @@ use walkdir::WalkDir;
 
 mod age;
 mod changes;
+pub(crate) mod decrypted_journal;
 pub(crate) mod edit;
 pub(crate) mod export;
 pub(crate) mod git;
-pub(crate) mod rekey;
 
 use crate::errors::{ErrorKind, JournalError};
 
@@ -123,6 +123,7 @@ impl std::ops::Index<usize> for JournalSection {
 
 #[derive(Clone, Debug)]
 pub struct Journal {
+    pub(self) path: String,
     _documents: Vec<String>,
     pub general: JournalSection,
     pub narrative: JournalSection,
@@ -178,6 +179,7 @@ impl Journal {
             JournalSection::new(EntryKind::Narrative, repo, &changes, &entries.narrative);
 
         Journal {
+            path: path.to_string(),
             _documents: entries.documents,
             general,
             narrative,

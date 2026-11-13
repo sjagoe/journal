@@ -30,7 +30,8 @@ use crate::{
     config::Config,
     errors::{ErrorKind, JournalError},
     journal::{
-        EntryKind, Journal, edit::EntryEditor, export::EntryExporter, git, rekey::EntryReKey,
+        EntryKind, Journal, decrypted_journal::DecryptedJournal, edit::EntryEditor,
+        export::EntryExporter, git,
     },
     traits::{Drawable, Navigable},
     ui::centered_rect,
@@ -189,7 +190,7 @@ impl<'a> App<'a> {
         kind: &EntryKind,
         entry: &str,
     ) -> Result<bool, JournalError> {
-        let entry_editor = EntryEditor::new(&self.config)?;
+        let entry_editor = EntryEditor::new(&self.config, &self.journal)?;
         let file_changed = entry_editor.edit(kind, entry)?;
         if !file_changed {
             return Ok(file_changed);
@@ -211,7 +212,7 @@ impl<'a> App<'a> {
             Err(e) => panic!("failed to open: {}", e),
         };
 
-        let entry_editor = EntryEditor::new(&self.config)?;
+        let entry_editor = EntryEditor::new(&self.config, &self.journal)?;
 
         let created = entry_editor
             .create_entry(kind, new_entry)
@@ -357,7 +358,7 @@ impl<'a> App<'a> {
             Action::ExportEntry => {
                 if let Some(entry) = page.select(&self.journal) {
                     let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                    let entry_exporter = EntryExporter::new(&self.config)?;
+                    let entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
                     self.entry_exporter = Some(entry_exporter);
                     self.begin_export_entry(&entry_kind, &entry)?;
                     self.mode = InputMode::ExportEntry(None);
@@ -366,7 +367,7 @@ impl<'a> App<'a> {
             }
 
             Action::ExportJournal => {
-                let entry_exporter = EntryExporter::new(&self.config)?;
+                let entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
                 self.entry_exporter = Some(entry_exporter);
                 self.begin_export_journal()?;
                 self.mode = InputMode::ExportEntry(None);
@@ -541,8 +542,12 @@ impl<'a> App<'a> {
     }
 
     pub fn re_key(&mut self, new_key_path: &Path) -> Result<(), JournalError> {
-        let mut re_key = EntryReKey::new(&self.config)?;
-        re_key.re_key_repository(&self.journal, new_key_path)?;
+        let decrypted = DecryptedJournal::new(&self.config, &self.journal)?;
+
+        for filename in self.journal.iter_files() {
+            decrypted.re_key_file(&filename, new_key_path)?;
+        }
+
         Ok(())
     }
 }
