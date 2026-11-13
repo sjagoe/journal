@@ -76,28 +76,38 @@ impl DecryptedJournal {
         filename: &str,
         decrypted_path: D,
     ) -> Result<(), JournalError> {
-        let mut encrypted_path = PathBuf::from(&self.journal_path);
-        encrypted_path.push(filename);
+        let final_path = self.encrypted_file_path(filename);
+        let temporary_path = final_path.with_added_extension("tmp");
 
         let public_keys = PublicKeys::new(&self.journal_path)?;
 
         let mut input = File::open(decrypted_path)
             .map_err(|_| JournalError::Error(ErrorKind::FileReadError))?;
-        encrypt(public_keys.keys, &mut input, &encrypted_path)?;
+        encrypt(public_keys.keys, &mut input, &temporary_path)?;
+
+        copy_file(&temporary_path, &final_path)
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
     }
 
     pub(super) fn encrypt_text(&self, filename: &str, text: &str) -> Result<(), JournalError> {
-        let mut encrypted_path = PathBuf::from(&self.journal_path);
-        encrypted_path.push(filename);
+        let final_path = self.encrypted_file_path(filename);
+        let temporary_path = final_path.with_added_extension("tmp");
 
         let public_keys = PublicKeys::new(&self.journal_path)?;
 
         let mut input = BufReader::new(text.as_bytes());
-        encrypt(public_keys.keys, &mut input, encrypted_path)?;
+        encrypt(public_keys.keys, &mut input, &temporary_path)?;
+
+        copy_file(&temporary_path, &final_path)
+            .map_err(|e| JournalError::Error(ErrorKind::Wrapped(e.to_string())))?;
 
         Ok(())
+    }
+
+    fn encrypted_file_path(&self, filename: &str) -> PathBuf {
+        PathBuf::from(&self.journal_path).join(filename)
     }
 
     pub(super) fn item_path(&self, filename: &str) -> PathBuf {
@@ -118,10 +128,7 @@ impl DecryptedJournal {
     }
 
     pub(super) fn encrypted_exists(&self, filename: &str) -> bool {
-        let mut encrypted_file_path = PathBuf::from(&self.journal_path);
-        encrypted_file_path.push(filename);
-
-        encrypted_file_path.exists()
+        self.encrypted_file_path(filename).exists()
     }
 
     pub fn re_key_file<P: AsRef<OsStr>>(
@@ -138,10 +145,8 @@ impl DecryptedJournal {
 
         let item_path = self.item_path(filename);
 
-        let mut encrypted_path = PathBuf::from(&self.journal_path);
-        encrypted_path.push(filename);
-        let final_path = encrypted_path.clone();
-        encrypted_path.add_extension("rekey");
+        let final_path = self.encrypted_file_path(filename);
+        let encrypted_path = final_path.with_added_extension("rekey");
 
         let public_keys = PublicKeys::new(&self.journal_path)?;
 
