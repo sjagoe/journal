@@ -176,27 +176,14 @@ impl EntryExporter {
 
     fn spawn_exporter<P: AsRef<std::ffi::OsStr>>(
         &mut self,
-        decrypted_path: P,
-        export_elisp: Option<PathBuf>,
+        export_elisp: P,
     ) -> Result<(), JournalError> {
         let mut command = Command::new("emacs");
-        if let Some(elisp) = export_elisp {
-            command
-                .args(["--batch", "--script"])
-                .arg(elisp)
-                .args(["-f", "org-mode", "-f", "org-publish-all", "--kill"])
-                .stderr(Stdio::null());
-        } else {
-            command.arg(decrypted_path).args([
-                "--batch",
-                "-f",
-                "org-mode",
-                "-f",
-                "org-html-export-to-html",
-                "--kill",
-            ]);
-        }
         command
+            .args(["--batch", "--script"])
+            .arg(export_elisp)
+            .args(["-f", "org-mode", "-f", "org-publish-all", "--kill"])
+            .stderr(Stdio::null())
             .current_dir(self.journal.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
@@ -248,7 +235,7 @@ impl EntryExporter {
         let project_path = PathBuf::from(self.journal.dir.path()).join("export.el");
         std::fs::write(&project_path, &project_config).unwrap();
 
-        self.spawn_exporter(&index_path, Some(project_path))?;
+        self.spawn_exporter(&project_path)?;
 
         Ok(())
     }
