@@ -27,7 +27,7 @@ enum ExportProcess {
 
 pub struct EntryExporter {
     progress: f64,
-    journal: DecryptedJournal,
+    decrypted_journal: Option<DecryptedJournal>,
     export_process: Option<ExportProcess>,
     launch_started: Option<Instant>,
     export_command: String,
@@ -46,20 +46,18 @@ fn get_export_command(
 }
 
 impl EntryExporter {
-    pub fn new(config: &Config, journal: &Journal) -> Result<Self, JournalError> {
+    pub fn new(config: &Config) -> Result<Self, JournalError> {
         let publish_path = tempfile::tempdir()
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
         fs::set_permissions(&publish_path, PermissionsExt::from_mode(0o700))
             .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
-
-        let decrypted = DecryptedJournal::new(config, journal)?;
 
         let (export_command, export_command_args) =
             get_export_command(config.export.as_ref().map(|export| export.to_owned()))?;
 
         let exporter = Self {
             progress: 0.0,
-            journal: decrypted,
+            decrypted_journal: None,
             export_process: None,
             launch_started: None,
             export_command,
@@ -89,6 +87,7 @@ impl EntryExporter {
                                 self.publish_path.path().join("index.html")
                             };
                             self.export_process = None;
+                            self.decrypted_journal = None;
                             self.spawn_browser(&exported_path)?;
                         } else {
                             let message = format!("Editor exited with code {:?}", status.code());
@@ -184,7 +183,7 @@ impl EntryExporter {
             .arg(export_elisp)
             .args(["-f", "org-mode", "-f", "org-publish-all", "--kill"])
             .stderr(Stdio::null())
-            .current_dir(self.journal.dir.path())
+            .current_dir(self.publish_path.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
         if let Ok(child) = command.spawn() {
@@ -199,25 +198,27 @@ impl EntryExporter {
         Ok(())
     }
 
-    pub fn export_journal(&mut self, journal: &Journal) -> Result<(), JournalError> {
+    pub fn export_journal(&mut self, config: &Config, encrypted_journal: &Journal) -> Result<(), JournalError> {
+        let decrypted_journal = DecryptedJournal::new(config, encrypted_journal)?;
+
         let mut index: Vec<String> = Vec::new();
 
         index.push("#+SETUPFILE: style.css.org".to_string());
         index.push("* Index".to_string());
 
-        for section in journal.sections() {
+        for section in encrypted_journal.sections() {
             index.push(format!("** {}\n", String::from(&section.kind)));
 
-            for entry_name in journal.section(&section.kind).iter_entries() {
+            for entry_name in encrypted_journal.section(&section.kind).iter_entries() {
                 let filename = entry_filename(&section.kind, entry_name);
-                let decrypted_path = self.journal.item_path(&filename);
+                let decrypted_path = decrypted_journal.item_path(&filename);
 
                 let link = format!("[[file:{}][~{}~]]", decrypted_path.display(), entry_name);
                 index.push(link);
             }
         }
 
-        let index_path = self.journal.dir.path().join("index.org");
+        let index_path = decrypted_journal.dir.path().join("index.org");
 
         std::fs::write(&index_path, index.join("\n\n")).unwrap();
 
@@ -228,12 +229,14 @@ impl EntryExporter {
     :publishing-directory {:?}
     :recursive t)))
 ",
-            self.journal.dir.path().display(),
+            decrypted_journal.dir.path().display(),
             self.publish_path.path().display(),
         );
 
-        let project_path = PathBuf::from(self.journal.dir.path()).join("export.el");
+        let project_path = PathBuf::from(decrypted_journal.dir.path()).join("export.el");
         std::fs::write(&project_path, &project_config).unwrap();
+
+        self.decrypted_journal = Some(decrypted_journal);
 
         self.spawn_exporter(&project_path)?;
 

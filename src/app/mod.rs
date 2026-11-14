@@ -260,7 +260,7 @@ impl<'a> App<'a> {
 
     fn begin_export_journal(&self, entry_exporter: &mut EntryExporter) -> Result<(), JournalError> {
         entry_exporter
-            .export_journal(&self.journal)
+            .export_journal(&self.config, &self.journal)
             .map_err(|err| match err {
                 JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
             })?;
@@ -345,7 +345,7 @@ impl<'a> App<'a> {
             Action::ExportEntry => {
                 if let Some(entry) = page.select(&self.journal) {
                     let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                    let mut entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
+                    let mut entry_exporter = EntryExporter::new(&self.config)?;
                     entry_exporter.open_entry(&entry_kind, &entry);
                     self.begin_export_journal(&mut entry_exporter)?;
                     self.entry_exporter = Some(entry_exporter);
@@ -355,7 +355,7 @@ impl<'a> App<'a> {
             }
 
             Action::ExportJournal => {
-                let mut entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
+                let mut entry_exporter = EntryExporter::new(&self.config)?;
                 self.begin_export_journal(&mut entry_exporter)?;
                 self.entry_exporter = Some(entry_exporter);
                 self.mode = InputMode::ExportEntry(None);
