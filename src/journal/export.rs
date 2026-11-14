@@ -198,7 +198,11 @@ impl EntryExporter {
         Ok(())
     }
 
-    pub fn export_journal(&mut self, config: &Config, encrypted_journal: &Journal) -> Result<(), JournalError> {
+    pub fn export_journal(
+        &mut self,
+        config: &Config,
+        encrypted_journal: &Journal,
+    ) -> Result<(), JournalError> {
         let decrypted_journal = DecryptedJournal::new(config, encrypted_journal)?;
 
         let mut index: Vec<String> = Vec::new();
