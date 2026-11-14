@@ -1,10 +1,13 @@
 use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
     path::PathBuf,
-    process::{Child, Command},
+    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
 
 use color_eyre::Result;
+use tempfile::TempDir;
 
 use crate::{
     config::Config,
@@ -30,6 +33,7 @@ pub struct EntryExporter {
     export_command: String,
     export_command_args: Vec<String>,
     exported_path: Option<PathBuf>,
+    publish_path: TempDir,
 }
 
 fn get_export_command(
@@ -43,6 +47,11 @@ fn get_export_command(
 
 impl EntryExporter {
     pub fn new(config: &Config, journal: &Journal) -> Result<Self, JournalError> {
+        let publish_path = tempfile::tempdir()
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+        fs::set_permissions(&publish_path, PermissionsExt::from_mode(0o700))
+            .map_err(|_| JournalError::chain(&[ErrorKind::Decryption, ErrorKind::TemporaryFile]))?;
+
         let decrypted = DecryptedJournal::new(config, journal)?;
 
         let (export_command, export_command_args) =
@@ -56,6 +65,7 @@ impl EntryExporter {
             export_command,
             export_command_args,
             exported_path: None,
+            publish_path,
         };
         Ok(exporter)
     }
@@ -160,20 +170,30 @@ impl EntryExporter {
     fn spawn_exporter<P: AsRef<std::ffi::OsStr>>(
         &mut self,
         decrypted_path: P,
+        export_elisp: Option<PathBuf>,
     ) -> Result<(), JournalError> {
         let mut command = Command::new("emacs");
-        command
-            .arg(decrypted_path)
-            .args([
+        if let Some(elisp) = export_elisp {
+            command
+                .args(["--batch", "--script"])
+                .arg(elisp)
+                .args(["-f", "org-mode", "-f", "org-publish-all", "--kill"])
+                .stderr(Stdio::null());
+        } else {
+            command.arg(decrypted_path).args([
                 "--batch",
                 "-f",
                 "org-mode",
                 "-f",
                 "org-html-export-to-html",
                 "--kill",
-            ])
+            ]);
+        }
+        command
             .current_dir(self.journal.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
+
+        // println!("{:?}", command);
 
         if let Ok(child) = command.spawn() {
             self.export_process = Some(ExportProcess::Export(child));
@@ -196,7 +216,7 @@ impl EntryExporter {
 
         let input_path = self.journal.item_path(&filename);
 
-        self.spawn_exporter(&input_path)?;
+        self.spawn_exporter(&input_path, None)?;
 
         self.exported_path = Some(input_path.with_extension("html"));
 
@@ -219,7 +239,7 @@ impl EntryExporter {
                 let link = format!("[[file:{}][~{}~]]", decrypted_path.display(), entry_name);
                 index.push(link);
 
-                self.spawn_exporter(&decrypted_path)?;
+                // self.spawn_exporter(&decrypted_path)?;
             }
         }
 
@@ -227,9 +247,26 @@ impl EntryExporter {
 
         std::fs::write(&index_path, index.join("\n\n")).unwrap();
 
-        self.spawn_exporter(&index_path)?;
+        let project_config = format!(
+            "(setq org-publish-project-alist
+  '((\"journal\"
+    :base-directory {:?}
+    :publishing-directory {:?}
+    :recursive t)))
+",
+            self.journal.dir.path().display(),
+            self.publish_path.path().display(),
+        );
 
-        self.exported_path = Some(index_path.with_extension("html"));
+        let project_path = PathBuf::from(self.journal.dir.path()).join("export.el");
+        std::fs::write(&project_path, &project_config).unwrap();
+
+        self.spawn_exporter(&index_path, Some(project_path))?;
+
+        let exported_path = PathBuf::from(&self.publish_path.path())
+            .join(index_path.strip_prefix(&self.journal.dir.path()).unwrap())
+            .with_extension("html");
+        self.exported_path = Some(exported_path);
 
         Ok(())
     }
