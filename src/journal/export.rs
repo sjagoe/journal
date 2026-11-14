@@ -32,8 +32,8 @@ pub struct EntryExporter {
     launch_started: Option<Instant>,
     export_command: String,
     export_command_args: Vec<String>,
-    exported_path: Option<PathBuf>,
     publish_path: TempDir,
+    open_entry: Option<String>,
 }
 
 fn get_export_command(
@@ -64,10 +64,14 @@ impl EntryExporter {
             launch_started: None,
             export_command,
             export_command_args,
-            exported_path: None,
             publish_path,
+            open_entry: None,
         };
         Ok(exporter)
+    }
+
+    pub fn open_entry(&mut self, kind: &EntryKind, name: &str) {
+        self.open_entry = Some(entry_filename(kind, name));
     }
 
     fn check_progress(&mut self) -> Result<(), JournalError> {
@@ -76,11 +80,14 @@ impl EntryExporter {
                 ExportProcess::Export(child) => {
                     if let Ok(Some(status)) = child.try_wait() {
                         if status.success() {
-                            let exported_path = self
-                                .exported_path
-                                .as_ref()
-                                .expect("Should have been set at start of export")
-                                .clone();
+                            let exported_path = if let Some(ref open_entry) = self.open_entry {
+                                self.publish_path
+                                    .path()
+                                    .join(open_entry)
+                                    .with_extension("html")
+                            } else {
+                                self.publish_path.path().join("index.html")
+                            };
                             self.export_process = None;
                             self.spawn_browser(&exported_path)?;
                         } else {
@@ -193,8 +200,6 @@ impl EntryExporter {
             .current_dir(self.journal.dir.path())
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
-        // println!("{:?}", command);
-
         if let Ok(child) = command.spawn() {
             self.export_process = Some(ExportProcess::Export(child));
         } else {
@@ -203,22 +208,6 @@ impl EntryExporter {
                 ErrorKind::Wrapped("Failed to execute editor".to_string()),
             ]));
         }
-
-        Ok(())
-    }
-
-    pub fn export_single_entry(
-        &mut self,
-        kind: &EntryKind,
-        entry: &str,
-    ) -> Result<(), JournalError> {
-        let filename = entry_filename(kind, entry);
-
-        let input_path = self.journal.item_path(&filename);
-
-        self.spawn_exporter(&input_path, None)?;
-
-        self.exported_path = Some(input_path.with_extension("html"));
 
         Ok(())
     }
@@ -238,8 +227,6 @@ impl EntryExporter {
 
                 let link = format!("[[file:{}][~{}~]]", decrypted_path.display(), entry_name);
                 index.push(link);
-
-                // self.spawn_exporter(&decrypted_path)?;
             }
         }
 
@@ -262,11 +249,6 @@ impl EntryExporter {
         std::fs::write(&project_path, &project_config).unwrap();
 
         self.spawn_exporter(&index_path, Some(project_path))?;
-
-        let exported_path = PathBuf::from(&self.publish_path.path())
-            .join(index_path.strip_prefix(&self.journal.dir.path()).unwrap())
-            .with_extension("html");
-        self.exported_path = Some(exported_path);
 
         Ok(())
     }
