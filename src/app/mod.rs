@@ -258,25 +258,12 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    fn begin_export_entry(&mut self, kind: &EntryKind, entry: &str) -> Result<(), JournalError> {
-        if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter
-                .export_single_entry(kind, entry)
-                .map_err(|err| match err {
-                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-                })?;
-        }
-        Ok(())
-    }
-
-    fn begin_export_journal(&mut self) -> Result<(), JournalError> {
-        if let Some(ref mut entry_exporter) = self.entry_exporter {
-            entry_exporter
-                .export_journal(&self.journal)
-                .map_err(|err| match err {
-                    JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
-                })?;
-        }
+    fn begin_export_journal(&self, entry_exporter: &mut EntryExporter) -> Result<(), JournalError> {
+        entry_exporter
+            .export_journal(&self.config, &self.journal)
+            .map_err(|err| match err {
+                JournalError::Error(e) => JournalError::chain(&[ErrorKind::ExportingEntry, e]),
+            })?;
         Ok(())
     }
 
@@ -358,18 +345,19 @@ impl<'a> App<'a> {
             Action::ExportEntry => {
                 if let Some(entry) = page.select(&self.journal) {
                     let entry_kind = EntryKind::from(&self.entries_page.active_pane);
-                    let entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
+                    let mut entry_exporter = EntryExporter::new(&self.config)?;
+                    entry_exporter.open_entry(&entry_kind, &entry);
+                    self.begin_export_journal(&mut entry_exporter)?;
                     self.entry_exporter = Some(entry_exporter);
-                    self.begin_export_entry(&entry_kind, &entry)?;
                     self.mode = InputMode::ExportEntry(None);
                     return Ok(Redraw(false));
                 }
             }
 
             Action::ExportJournal => {
-                let entry_exporter = EntryExporter::new(&self.config, &self.journal)?;
+                let mut entry_exporter = EntryExporter::new(&self.config)?;
+                self.begin_export_journal(&mut entry_exporter)?;
                 self.entry_exporter = Some(entry_exporter);
-                self.begin_export_journal()?;
                 self.mode = InputMode::ExportEntry(None);
                 return Ok(Redraw(false));
             }
