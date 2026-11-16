@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     ffi::OsStr,
     fs::File,
@@ -81,6 +82,7 @@ fn get_editor_command(
 pub struct EntryEditor {
     editor: String,
     editor_args: Vec<String>,
+    editor_environment: HashMap<String, String>,
     journal: DecryptedJournal,
 }
 
@@ -93,6 +95,7 @@ impl EntryEditor {
         let entry_editor = EntryEditor {
             editor,
             editor_args,
+            editor_environment: config.editor_environment.clone(),
             journal: decrypted,
         };
         Ok(entry_editor)
@@ -103,6 +106,7 @@ impl EntryEditor {
         command
             .args(&self.editor_args)
             .arg(decrypted_path)
+            .envs(&self.editor_environment)
             .env("_JOURNAL_EMACS_EMBEDDED", "t");
 
         if let Ok(mut child) = command.spawn() {
