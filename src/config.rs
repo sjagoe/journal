@@ -13,6 +13,8 @@ enum Identities {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub editor: Option<String>,
+    #[serde(default)]
+    pub editor_environment: HashMap<String, String>,
     #[serde(alias = "identity")]
     identities: Identities,
     pub journal_path: String,
@@ -37,6 +39,7 @@ impl Config {
         identities.push(identity);
         Self {
             editor: self.editor.clone(),
+            editor_environment: self.editor_environment.clone(),
             identities: Identities::Multiple(identities),
             journal_path: self.journal_path.to_owned(),
             export: self.export.clone(),
